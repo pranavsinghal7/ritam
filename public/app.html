@@ -1,0 +1,1799 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ritam - heart early-warning prototype</title>
+<meta name="description" content="Compares a person's pulse with their own normal and flags unusual patterns. A hackathon prototype, not a medical device.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wdth,wght@12..96,75..100,300..800&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: light;
+  --paper:#fff4f3;
+  --grid-minor:rgba(206,84,84,.13);
+  --grid-major:rgba(206,84,84,.28);
+  --sheet:#ffffff;
+  --ink:#1f1a24;
+  --muted:#675e6b;
+  --line:#e6d2d2;
+  --ok:#0d6b62;
+  --watch:#a35a00;
+  --alert:#c4122f;
+  --info:#3b5bdb;
+  --focus:#3b5bdb;
+  --display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:#faf0ee; color:var(--ink);
+  font-family:var(--body); font-size:17px; line-height:1.5;
+}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:4px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 48px}
+
+/* top bar */
+.alertbar{margin:0 0 14px;padding:12px 16px;border:2px solid var(--alert);border-radius:6px;background:var(--sheet);display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.alertbar b{color:var(--alert)}.alertbar.calm{border-color:var(--line)}.alertbar.calm b{color:inherit}
+.alertbar .msg{flex:1 1 320px;margin:0}.alertbar .acts{display:flex;flex-wrap:wrap;gap:8px}
+.hist{list-style:none;margin:10px 0 0;padding:0}.hist li{display:flex;flex-wrap:wrap;gap:4px 12px;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+.hist .when{color:var(--muted);min-width:150px}
+.profile-line{margin:0 0 12px;font-size:14px;color:var(--muted)}
+.profile-line a{color:inherit;font-weight:700;margin-left:6px}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;padding:18px 0 14px}
+.brand{font-family:var(--display);font-weight:800;font-size:28px;letter-spacing:-.02em;font-stretch:85%}
+.tagline{color:var(--muted)}
+.notice{
+  margin:0 0 16px;padding:10px 14px;border:1px solid var(--line);border-left:6px solid var(--watch);
+  background:var(--sheet);font-size:15.5px;border-radius:4px;
+}
+
+/* layout */
+.grid{
+  display:grid;gap:16px;
+  grid-template-columns:repeat(12,minmax(0,1fr));
+  grid-template-areas:
+    "strip strip strip strip strip strip strip strip strip strip strip strip"
+    "score score score score score status status status status status status status"
+    "camera camera camera camera camera records records records records records records records"
+    "source source source source source trend trend trend trend trend trend trend"
+    "feel feel feel feel feel base base base base base base base"
+    "chat chat chat chat chat chat chat chat chat chat chat chat";
+}
+.a-strip{grid-area:strip}.a-score{grid-area:score}.a-status{grid-area:status}.a-camera{grid-area:camera}.a-source{grid-area:source}
+.a-records{grid-area:records}.a-trend{grid-area:trend}.a-feel{grid-area:feel}.a-base{grid-area:base}.a-chat{grid-area:chat}
+@media (max-width:900px){
+  .grid{grid-template-columns:minmax(0,1fr);
+    grid-template-areas:"strip" "score" "status" "camera" "source" "records" "trend" "feel" "base" "chat"}
+}
+
+.panel{background:var(--sheet);border:1px solid var(--line);border-radius:6px;padding:18px 20px}
+.panel h2{font-family:var(--display);font-weight:700;font-size:21px;letter-spacing:-.01em;margin-bottom:4px}
+.hint{color:var(--muted);font-size:15.5px}
+
+/* ECG strip (the one loud element) */
+.strip{
+  position:relative;border:1px solid #e3b9b9;border-radius:6px;overflow:hidden;
+  background-color:var(--paper);
+  background-image:
+    linear-gradient(var(--grid-major) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid-major) 1px,transparent 1px),
+    linear-gradient(var(--grid-minor) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid-minor) 1px,transparent 1px);
+  background-size:60px 60px,60px 60px,12px 12px,12px 12px;
+  border-left:10px solid var(--ink);
+  transition:border-left-color .3s;
+}
+.strip[data-level="0"]{border-left-color:var(--ok)}
+.strip[data-level="1"]{border-left-color:var(--watch)}
+.strip[data-level="2"]{border-left-color:var(--alert)}
+.strip-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 24px;padding:14px 20px 0}
+.readout{display:flex;align-items:center;gap:16px}
+.heart{width:44px;height:44px;flex:none;color:var(--alert);transform-origin:center;animation:beat var(--beat,1s) ease-in-out infinite}
+.heart svg{width:100%;height:100%;display:block}
+@keyframes beat{0%,100%{transform:scale(1)}12%{transform:scale(1.14)}28%{transform:scale(1)}}
+.bpm{
+  font-family:var(--display);font-weight:800;font-stretch:78%;
+  font-size:clamp(68px,11vw,120px);line-height:.92;letter-spacing:-.03em;
+  font-variant-numeric:tabular-nums;
+}
+.bpm-unit{font-family:var(--display);font-weight:600;font-size:20px;line-height:1.2}
+.chip{
+  display:inline-block;margin-top:4px;padding:2px 10px;border-radius:999px;border:1.5px solid var(--ink);
+  font-size:14.5px;font-weight:700;background:#fff;
+}
+.chip.active{border-color:var(--info);color:var(--info)}
+.chip.resting{border-color:var(--ok);color:var(--ok)}
+.strip-note{max-width:34ch;color:var(--muted);font-size:14.5px;text-align:right;padding-bottom:6px}
+#ecg{display:block;width:100%;height:170px}
+
+/* status */
+.status{position:relative;padding:0;display:flex;overflow:hidden}
+.status-bar{width:12px;flex:none;background:var(--muted);transition:background .3s}
+.status[data-level="0"] .status-bar{background:var(--ok)}
+.status[data-level="1"] .status-bar{background:var(--watch)}
+.status[data-level="2"] .status-bar{background:var(--alert)}
+.status-body{padding:18px 20px 20px;min-width:0;flex:1}
+.status-tag{font-weight:700;font-size:15.5px;color:var(--muted)}
+.status[data-level="0"] .status-tag{color:var(--ok)}
+.status[data-level="1"] .status-tag{color:var(--watch)}
+.status[data-level="2"] .status-tag{color:var(--alert)}
+.status h2{font-size:clamp(27px,4vw,36px);font-weight:800;font-stretch:90%;line-height:1.1;margin:2px 0 8px}
+.status-sub{max-width:60ch}
+.findings{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:10px}
+.findings li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
+.badge{
+  font-size:13.5px;font-weight:700;padding:1px 8px;border-radius:4px;border:1.5px solid currentColor;white-space:nowrap
+}
+.badge.l0{color:var(--ok)}.badge.l1{color:var(--watch)}.badge.l2{color:#fff;background:var(--alert);border-color:var(--alert)}
+.findings b{font-weight:700}
+.findings .why{grid-column:2;color:var(--muted);font-size:15.5px}
+
+/* buttons */
+.btn{
+  min-height:44px;padding:8px 16px;border-radius:6px;border:1.5px solid var(--ink);background:#fff;
+  font-weight:700;cursor:pointer;text-align:center;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;
+}
+.btn:hover{background:#f6ecec}
+.btn.primary{background:var(--ink);color:#fff}
+.btn.primary:hover{background:#3a3243}
+.btn.danger{background:var(--alert);border-color:var(--alert);color:#fff}
+.btn.danger:hover{background:#a50f27}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+
+/* source */
+.scns{display:grid;gap:8px;margin:12px 0}
+.scn{
+  text-align:left;border:1.5px solid var(--line);background:#fff;border-radius:6px;padding:10px 12px;cursor:pointer;
+  display:grid;gap:0
+}
+.scn:hover{border-color:var(--ink)}
+.scn[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 5px 0 0 var(--ink)}
+.scn b{font-family:var(--display);font-size:18px}
+.scn span{color:var(--muted);font-size:15px}
+.field{display:grid;gap:4px;min-width:0}
+.field label,.legend-title{font-weight:700;font-size:15.5px}
+input[type="number"],input[type="text"],input[type="password"],input[type="tel"],select{
+  min-height:44px;border:1.5px solid #b9a9ad;border-radius:6px;padding:6px 10px;background:#fff;width:100%
+}
+.sep{border:0;border-top:1px solid var(--line);margin:16px 0}
+.err{color:var(--alert);font-size:15px;min-height:1.4em}
+.inline{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end}
+@media (max-width:420px){.inline{grid-template-columns:1fr 1fr}.inline .btn{grid-column:1/-1}}
+
+/* trend */
+#trend{display:block;width:100%;height:270px;margin-top:8px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:8px;font-size:15px;color:var(--muted)}
+.legend i{display:inline-block;vertical-align:middle;margin-right:6px}
+.sw-rest{width:11px;height:11px;border-radius:50%;background:var(--ok)}
+.sw-act{width:10px;height:10px;background:var(--info);transform:rotate(45deg)}
+.sw-band{width:20px;height:11px;background:rgba(13,107,98,.16);border:1px solid rgba(13,107,98,.4)}
+.sw-line{width:20px;height:0;border-top:2px dashed var(--watch)}
+
+/* symptoms + profile */
+.checks{display:grid;gap:4px;margin:10px 0 0;padding:0;border:0}
+.check{display:flex;gap:12px;align-items:flex-start;padding:8px 6px;border-radius:6px;cursor:pointer}
+.check:hover{background:#faf0ee}
+.check input{width:22px;height:22px;margin:2px 0 0;flex:none;accent-color:var(--ink)}
+.callout{margin-top:12px;padding:10px 12px;border-radius:6px;background:#fdeceb;border:1px solid #efbcbc;font-size:15.5px}
+.form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;margin-top:10px}
+.form .full{grid-column:1/-1}
+@media (max-width:560px){.form{grid-template-columns:minmax(0,1fr)}}
+
+/* baseline bars */
+.bars{display:flex;align-items:flex-end;gap:4px;height:150px;margin:14px 0 4px;border-bottom:2px solid var(--ink)}
+.bar{flex:1;min-width:0;background:var(--ok);opacity:.55;border-radius:3px 3px 0 0;position:relative}
+.bar.flag{background:var(--watch);opacity:.9}
+.bar.today{opacity:1;background:var(--ink)}
+.bar-empty{flex:1;text-align:center;color:var(--muted);align-self:center}
+.base-text{font-size:16px}
+.base-text b{font-family:var(--display);font-size:22px;font-variant-numeric:tabular-nums}
+
+
+/* camera scanner */
+.cam-panel{display:none;margin-top:14px}.cam-panel.visible{display:block}
+.cam-video{height:150px;border-radius:8px;background:#0b0b12;position:relative;overflow:hidden;margin-bottom:12px}
+.cam-video video{width:100%;height:100%;display:block;object-fit:cover;opacity:.8}
+.cam-overlay{position:absolute;inset:0;background:rgba(0,0,0,.25);display:grid;place-items:center;pointer-events:none;padding:14px;text-align:center;color:#fff;font-size:14px}
+.cam-guide{display:none;padding:10px 12px;margin-bottom:10px;border:1px solid #e9c98d;border-radius:6px;background:#fff4e0;font-size:15px}.cam-guide.visible{display:block}
+.cam-status{display:none;padding:10px 12px;margin-bottom:10px;border-radius:6px;font-size:15px}.cam-status.visible{display:block}
+.cam-status.error{background:#fdeceb;border:1px solid #efbcbc}.cam-status.info{background:#eef4fb;border:1px solid #bfd3ea}.cam-status.success{background:#e8f5f2;border:1px solid #a8d5cc}
+.cam-result{text-align:center;padding:6px 0}
+.cam-bpm{font-family:var(--display);font-weight:800;font-size:56px;line-height:1;color:#b9aeb0;font-variant-numeric:tabular-nums}
+.cam-bpm.ready{color:var(--ink)}
+.cam-unit{font-size:13px;letter-spacing:.14em;font-weight:700;color:var(--muted)}
+.cam-quality{display:inline-block;margin-top:8px;padding:2px 12px;border-radius:12px;border:1px solid var(--line);font-size:14px;font-weight:700}
+.cam-quality.good{color:var(--ok)}.cam-quality.fair{color:var(--watch)}.cam-quality.poor{color:var(--alert)}
+.cam-wave{height:110px;border-radius:8px;overflow:hidden;background:#1a1a2e;margin:8px 0 12px}
+.cam-wave canvas{display:block;width:100%;height:100%}
+.cam-progress-head{display:flex;justify-content:space-between;gap:10px;font-size:14px;color:var(--muted);margin-bottom:6px}
+.cam-progress{height:6px;background:#efe3e1;border-radius:4px;overflow:hidden}
+.cam-progress i{display:block;height:100%;width:0;background:var(--ink);transition:width .15s linear}
+.cam-diag{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.cam-diag div{background:#faf0ee;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:13.5px}
+.cam-diag span{display:block;color:var(--muted);font-size:12.5px}
+td .del{background:none;border:0;color:var(--alert);font-weight:700;cursor:pointer;padding:2px 4px;text-decoration:underline}
+.top .logout{margin-left:auto}
+
+/* heart score */
+.score-wrap{display:flex;gap:20px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.ring{position:relative;width:132px;height:132px;flex:none}
+.ring svg{width:132px;height:132px;transform:rotate(-90deg)}
+.ring .num{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:42px;font-variant-numeric:tabular-nums}
+.band{font-family:var(--display);font-weight:700;font-size:22px;line-height:1.15}
+.parts{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:10px}
+.parts li{display:grid;grid-template-columns:1fr auto;gap:2px 10px;font-size:15.5px}
+.parts .meter{grid-column:1/-1;height:8px;border-radius:4px;background:#efe3e1;overflow:hidden}
+.parts .meter i{display:block;height:100%;background:var(--ok)}
+.parts .why{grid-column:1/-1;color:var(--muted);font-size:14.5px}
+.progress{height:10px;border-radius:5px;background:#efe3e1;overflow:hidden;margin:10px 0 6px}
+.progress i{display:block;height:100%;background:var(--ok)}
+.cap{margin-top:10px;padding:8px 10px;border-radius:6px;background:#fff4e0;border:1px solid #e9c98d;font-size:14.5px}
+/* records table */
+.tbl-wrap{overflow-x:auto;margin-top:10px}
+table.rec{width:100%;border-collapse:collapse;font-size:15px}
+table.rec th{text-align:left;font-weight:700;border-bottom:2px solid var(--ink);padding:6px 8px;white-space:nowrap}
+table.rec td{padding:6px 8px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;white-space:nowrap}
+table.rec td.b{font-weight:700}
+.tag{display:inline-block;padding:0 8px;border-radius:10px;font-size:13px;border:1px solid var(--line);background:#faf0ee}
+.tag.l1{color:var(--watch);border-color:var(--watch)}.tag.l2{color:#fff;background:var(--alert);border-color:var(--alert)}
+/* chat */
+.chat-log{margin-top:10px;border:1.5px solid var(--line);border-radius:6px;background:#fffdfd;padding:12px;height:340px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:78ch;padding:10px 14px;border-radius:12px;white-space:pre-wrap;font-size:16.5px;line-height:1.5}
+.msg.bot{align-self:flex-start;background:#f3ebe9}
+.msg.me{align-self:flex-end;background:var(--ink);color:#fff}
+.msg.warn{align-self:stretch;background:#fdeceb;border:1px solid #efbcbc;max-width:none;font-weight:700}
+.msg.sys{align-self:center;color:var(--muted);font-size:14.5px;background:none;text-align:center}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.chip-btn{border:1.5px solid var(--ink);background:#fff;border-radius:18px;padding:6px 14px;cursor:pointer;font-size:15px}
+.chip-btn:hover{background:#faf0ee}
+.chat-form{display:flex;gap:8px;margin-top:10px;align-items:flex-end}
+.chat-form textarea{flex:1;min-height:48px;max-height:120px;resize:vertical;padding:10px 12px;border:1.5px solid var(--ink);border-radius:6px;background:#fff}
+
+/* AI (old styles, unused) */
+.ai-grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:20px;margin-top:10px}
+@media (max-width:900px){.ai-grid{grid-template-columns:minmax(0,1fr)}}
+.ai-out{
+  border:1.5px solid var(--line);border-radius:6px;padding:14px 16px;min-height:200px;white-space:pre-wrap;background:#fffdfd;
+  font-size:17px;line-height:1.55
+}
+.ai-src{font-size:14.5px;color:var(--muted);margin-bottom:6px}
+details{margin-top:10px}
+summary{cursor:pointer;font-weight:700}
+pre{white-space:pre-wrap;word-break:break-word;background:#f6eeee;border-radius:6px;padding:10px;font-size:13.5px;max-height:240px;overflow:auto}
+
+footer{margin-top:20px;color:var(--muted);font-size:15px;max-width:80ch}
+
+/* alert dialog */
+dialog{
+  border:0;border-radius:8px;padding:0;max-width:560px;width:calc(100% - 32px);color:var(--ink);background:#fff;
+  box-shadow:0 20px 60px rgba(60,0,10,.45)
+}
+dialog::backdrop{background:rgba(120,10,25,.62)}
+.dlg-top{background:var(--alert);color:#fff;padding:18px 22px}
+.dlg-top h2{font-family:var(--display);font-size:30px;font-weight:800;font-stretch:88%;line-height:1.1;margin:0}
+.dlg-body{padding:18px 22px 22px}
+.dlg-body ul{margin:8px 0 14px;padding-left:20px}
+.dlg-actions{display:grid;gap:8px;margin-top:16px}
+.dlg-actions .btn{min-height:52px;font-size:18px}
+
+.toast{
+  position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:#fff;
+  padding:10px 16px;border-radius:6px;max-width:calc(100% - 32px);z-index:50
+}
+.toast[hidden]{display:none}
+
+@media (prefers-reduced-motion:reduce){
+  .heart{animation:none}
+  *{transition:none!important}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1 class="brand">Ritam</h1>
+    <p class="tagline">Compares your pulse with your own normal and flags what looks unusual.</p>
+    <button class="btn" id="btnNotif" type="button" hidden>Turn on device notifications</button>
+    <button class="btn logout" id="btnLogout" type="button">Log out</button>
+  </header>
+  <p class="profile-line" id="profileLine" hidden></p>
+  <div class="alertbar" id="alertBar" role="alert" hidden>
+    <p class="msg" id="alertMsg"></p>
+    <div class="acts">
+      <button class="btn primary" id="barOk" type="button" hidden>I'm OK, don't alert my contact</button>
+      <button class="btn" id="barNow" type="button" hidden>Message my contact now</button>
+      <button class="btn" id="barDismiss" type="button" hidden>Dismiss</button>
+    </div>
+  </div>
+  <p class="notice" role="note">A pulse reading counts beats; it cannot see a heart attack, and this app cannot rule one out. If you have chest pain, pressure, trouble breathing or feel faint, call <b>112</b> now.</p>
+
+  <main class="grid">
+
+    <!-- ECG strip -->
+    <section class="strip a-strip" id="strip" data-level="-1" aria-label="Latest pulse reading and simulated waveform">
+      <div class="strip-head">
+        <div class="readout">
+          <div class="heart" id="heart" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.2c-.3 0-.6-.1-.8-.3C6.4 17 2.5 13.6 2.5 9.2 2.5 6.3 4.7 4 7.5 4c1.8 0 3.4.9 4.5 2.4C13.100 4.900 14.700 4 16.500 4c2.800 0 5 2.300 5 5.200 0 4.400-3.900 7.800-8.700 11.700-.2.200-.5.300-.8.300z"/></svg>
+          </div>
+          <div>
+            <div class="bpm" id="bpm" aria-live="off">--</div>
+            <div class="bpm-unit">beats per minute <span class="chip" id="stateChip" hidden></span></div>
+          </div>
+        </div>
+        <p class="strip-note">Waveform is drawn from the pulse number. It is not a real ECG.</p>
+      </div>
+      <canvas id="ecg" role="img" aria-label="Animated heartbeat line, simulated from the latest pulse reading"></canvas>
+    </section>
+
+    <!-- Heart score -->
+    <section class="panel a-score" aria-labelledby="h-score">
+      <h2 id="h-score">Heart score</h2>
+      <div id="scoreBody"><p class="hint">Loading your records…</p></div>
+    </section>
+
+    <!-- Status -->
+    <section class="panel status a-status" id="status" data-level="-1" aria-labelledby="statusTitle">
+      <div class="status-bar" aria-hidden="true"></div>
+      <div class="status-body">
+        <p class="status-tag" id="statusTag">Waiting for readings</p>
+        <h2 id="statusTitle">No readings yet</h2>
+        <p class="status-sub" id="statusSub">Type in a pulse reading, or play a demo.</p>
+        <ul class="findings" id="findings"></ul>
+      </div>
+    </section>
+
+    <!-- Camera -->
+    <section class="panel a-camera" aria-labelledby="h-camera">
+      <h2 id="h-camera">Measure with your phone camera</h2>
+      <p class="hint">Cover the rear camera and flash with a fingertip and keep still for about 18 seconds. The result is saved to your records.</p>
+      <div class="row" style="margin:10px 0">
+        <label for="camState"><b>I am</b></label>
+        <select id="camState" style="width:auto"><option value="resting">Resting (sitting quietly)</option><option value="active">Active (just moved)</option></select>
+      </div>
+      <button class="btn primary" id="camMeasureBtn" type="button" style="width:100%">📸 Measure with phone camera</button>
+      <section id="camCameraPanel" class="cam-panel" aria-label="Camera measurement">
+        <div id="camStatusMsg" class="cam-status" role="status"></div>
+        <div id="camFingerGuide" class="cam-guide">☝️ Cover the rear camera and flash with your fingertip. Keep your hand still and use gentle, steady pressure.</div>
+        <div class="cam-video">
+          <video id="camCameraVideo" autoplay playsinline muted></video>
+          <div class="cam-overlay" id="camVideoOverlayText">Waiting for camera…</div>
+        </div>
+        <div class="cam-result">
+          <div id="camBpmValue" class="cam-bpm" aria-live="polite">— — —</div>
+          <div id="camBpmUnit" class="cam-unit" hidden>BPM</div>
+          <div id="camSignalQuality" class="cam-quality poor"><span id="camSignalQualityText">Waiting for signal</span></div>
+        </div>
+        <div class="cam-wave"><canvas id="camWaveformCanvas" role="img" aria-label="Pulse signal from the camera"></canvas></div>
+        <div class="cam-progress-head"><span id="camProgressLabel">Waiting for stable finger signal…</span><span id="camProgressTime">0s / 18s</span></div>
+        <div class="cam-progress"><i id="camProgressFill"></i></div>
+        <div class="row" style="margin-top:12px">
+          <button id="camTorchBtn" class="btn" type="button" hidden>🔦 Turn on flashlight</button>
+          <button id="camStopBtn" class="btn" type="button" hidden>⏹ Stop measurement</button>
+        </div>
+        <details>
+          <summary>Signal diagnostics (testing)</summary>
+          <div class="cam-diag">
+            <div><span>Selected channel</span><strong id="camDiagChannel">—</strong></div>
+            <div><span>Resampled rate</span><strong id="camDiagRate">15 Hz target</strong></div>
+            <div><span>Signal score</span><strong id="camDiagScore">—</strong></div>
+            <div><span>FFT / pulse peaks</span><strong id="camDiagAgreement">—</strong></div>
+          </div>
+        </details>
+      </section>
+      <canvas id="camProcessCanvas" width="32" height="32" hidden></canvas>
+      <p class="hint" style="margin-top:10px">Camera pulse is an estimate and works best with a still hand and a warm fingertip. It needs HTTPS (or localhost) and camera permission.</p>
+    </section>
+
+    <!-- Readings source -->
+    <section class="panel a-source" aria-labelledby="h-source">
+      <h2 id="h-source">Type in a reading, or try a demo day</h2>
+      <p class="hint">Typed-in readings are saved to your records. Demo days are practice only and are not saved.</p>
+      <div class="scns" role="group" aria-label="Demo days">
+        <button class="scn" data-scn="normal" aria-pressed="false"><b>Normal day</b><span>Resting, a short walk, back to rest. Should stay calm.</span></button>
+        <button class="scn" data-scn="workout" aria-pressed="false"><b>Workout</b><span>Very high pulse, but expected. Should stay calm.</span></button>
+        <button class="scn" data-scn="episode" aria-pressed="false"><b>Heart episode</b><span>Pulse climbs while sitting still. Should raise alerts.</span></button>
+      </div>
+      <div class="row">
+        <button class="btn" id="btnPlay" disabled>Pause</button>
+        <label class="sr" for="speed">Playback speed</label>
+        <select id="speed" style="width:auto">
+          <option value="1">Normal speed</option>
+          <option value="2" selected>2x faster</option>
+          <option value="4">4x faster</option>
+        </select>
+        <button class="btn" id="btnClear">Back to my records</button>
+      </div>
+      <hr class="sep">
+      <form id="manual" novalidate>
+        <p class="legend-title">Type in a pulse reading</p>
+        <div class="inline" style="margin-top:6px">
+          <div class="field"><label for="mBpm">Pulse (bpm)</label><input id="mBpm" type="number" inputmode="numeric" min="20" max="250" placeholder="e.g. 72"></div>
+          <div class="field"><label for="mState">You are</label>
+            <select id="mState"><option value="resting">Resting</option><option value="active">Active</option></select></div>
+          <button class="btn primary" type="submit">Add reading</button>
+        </div>
+        <p class="err" id="mErr" role="alert"></p>
+      </form>
+    </section>
+
+    <!-- Records -->
+    <section class="panel a-records" aria-labelledby="h-records">
+      <h2 id="h-records">Your heartbeat records</h2>
+      <p class="hint" id="recSub">Every reading you add is saved to your account.</p>
+      <div class="tbl-wrap">
+        <table class="rec" id="recTable">
+          <thead><tr><th>When</th><th>Pulse</th><th>State</th><th>Source</th><th>Alert</th><th><span class="sr">Delete</span></th></tr></thead>
+          <tbody id="recBody"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="recEmpty" hidden>No saved readings yet. Take a camera measurement or type one in.</p>
+      <div class="row" style="margin-top:12px">
+        <a class="btn" href="/api/readings.csv" download>Download my records</a>
+        <button class="btn" id="btnSample" type="button">Add 14 days of sample records</button>
+        <button class="btn" id="btnNoSample" type="button" hidden>Remove sample records</button>
+        <button class="btn danger" id="btnDeleteAll" type="button">Delete all my records</button>
+      </div>
+      <p class="hint" style="margin-top:8px">Sample records are made-up readings so you can see the heart score straight away. They are labelled "Sample" and can be removed.</p>
+    </section>
+
+    <!-- Trend -->
+    <section class="panel a-trend" aria-labelledby="h-trend">
+      <h2 id="h-trend">Latest readings</h2>
+      <canvas id="trend" role="img" aria-label="Line chart of recent pulse readings compared with your usual resting range"></canvas>
+      <div class="legend" aria-hidden="false">
+        <span><i class="sw-rest"></i>Resting</span>
+        <span><i class="sw-act"></i>Active</span>
+        <span><i class="sw-band"></i>Your usual resting range</span>
+        <span><i class="sw-line"></i>Resting alert level</span>
+      </div>
+      <p class="sr" id="trendText"></p>
+    </section>
+
+    <!-- Symptoms -->
+    <section class="panel a-feel" aria-labelledby="h-feel">
+      <h2 id="h-feel">How do you feel right now?</h2>
+      <p class="hint">Symptoms count as much as the numbers. Tick anything that applies.</p>
+      <fieldset class="checks" style="border:0;padding:0;margin:10px 0 0" id="symptoms">
+        <legend class="sr">Current symptoms</legend>
+        <label class="check"><input type="checkbox" data-sym="chestPain"><span>Chest pain, pressure or tightness</span></label>
+        <label class="check"><input type="checkbox" data-sym="armJaw"><span>Pain spreading to the arm, jaw, neck or back</span></label>
+        <label class="check"><input type="checkbox" data-sym="breath"><span>Short of breath</span></label>
+        <label class="check"><input type="checkbox" data-sym="sweat"><span>Cold sweat</span></label>
+        <label class="check"><input type="checkbox" data-sym="dizzy"><span>Dizzy, faint or nauseous</span></label>
+      </fieldset>
+      <p class="callout"><b>Chest pain or pressure?</b> Do not wait for this app. Call 112.</p>
+    </section>
+
+    <!-- Baseline -->
+    <section class="panel a-base" aria-labelledby="h-base">
+      <h2 id="h-base">Your normal</h2>
+      <p class="base-text" id="baseText"></p>
+      <div class="bars" id="bars" role="img" aria-label="Resting pulse for each recent day"></div>
+      <p class="hint" id="barsNote"></p>
+    </section>
+
+    <!-- Alert history -->
+    <section class="panel" style="grid-column:1/-1" aria-labelledby="h-hist">
+      <h2 id="h-hist">Alert history</h2>
+      <p class="hint">Every Watch and serious alert, and what happened. Your emergency contact is only messaged for serious alerts you do not respond to.</p>
+      <ul class="hist" id="histList"><li>No alerts yet.</li></ul>
+    </section>
+
+    <!-- Chat -->
+    <section class="panel a-chat" aria-labelledby="h-chat">
+      <h2 id="h-chat">Ask about your heart records</h2>
+      <p class="hint">Ask in your own words. The assistant can see your age, health conditions, readings and heart score. It cannot see your name, email, contact or medicine names. It explains; it does not diagnose or decide your alert level.</p>
+      <div class="chat-log" id="chatLog" role="log" aria-live="polite" aria-label="Conversation"></div>
+      <div class="chips" id="chips">
+        <button class="chip-btn" type="button">Explain my current alert</button>
+        <button class="chip-btn" type="button">What does my heart score mean?</button>
+        <button class="chip-btn" type="button">Why does my pulse go up when I walk?</button>
+        <button class="chip-btn" type="button">What should I tell my doctor?</button>
+      </div>
+      <form class="chat-form" id="chatForm">
+        <label class="sr" for="chatInput">Your question</label>
+        <textarea id="chatInput" maxlength="1000" placeholder="Type your question…" rows="2"></textarea>
+        <button class="btn primary" id="chatSend" type="submit">Send</button>
+      </form>
+      <div class="row" style="margin-top:8px"><button class="btn" id="chatNew" type="button">New chat</button></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Ritam is a learning prototype, MADE BY CTRL ALT ELITE</p>
+  </footer>
+</div>
+
+<dialog id="alertDlg" aria-labelledby="dlgTitle">
+  <div class="dlg-top"><h2 id="dlgTitle">Get medical help now</h2></div>
+  <div class="dlg-body">
+    <p id="dlgWhy">Your readings look unusual for you.</p>
+    <ul id="dlgList"></ul>
+    <p><b>Call 112 right away</b> if you have chest pain or pressure, pain in the arm, jaw or back, trouble breathing, a cold sweat, or you feel faint. Sit down and stay still until help arrives.</p>
+    <p class="hint" style="margin-top:8px">If you feel completely fine, sit down, rest for a few minutes and measure again. Movement, cold fingers and poor lighting can give false readings.</p>
+    <p id="dlgCountdown" style="font-weight:700"></p>
+    <div class="dlg-actions">
+      <a class="btn danger" href="tel:112" id="dlgCall">Call 112</a>
+      <button class="btn primary" id="dlgOk" type="button" hidden>I'm OK, don't alert my contact</button>
+      <button class="btn" id="dlgNow" type="button" hidden>Message my contact now</button>
+      <a class="btn" href="#" id="dlgContact" hidden>Call my contact</a>
+      <button class="btn" id="dlgClose" type="button">Close (countdown continues)</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<p class="sr" id="srLive" aria-live="assertive"></p>
+
+<script>
+'use strict';
+/* ============ helpers ============ */
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+const stdev = a => { const m = mean(a); return Math.sqrt(mean(a.map(x => (x - m) ** 2))); };
+const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+};
+const sess = {
+  get(k) { try { return sessionStorage.getItem(k) || ''; } catch (e) { return ''; } },
+  set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} }
+};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const fmtTime = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function el(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  if (props) for (const k in props) { if (k === 'class') e.className = props[k]; else e.setAttribute(k, props[k]); }
+  kids.forEach(k => e.append(k));
+  return e;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+}
+
+/* ============ state ============ */
+const BASE = 64; // pretend person's usual resting pulse (demo)
+const DEFAULT_PROFILE = { restingBpm: null, age: 40, hypertension: false, diabetes: false, heartDisease: false, smoker: false, betaBlocker: false, contactName: '', contactPhone: '' };
+const S = {
+  profile: Object.assign({}, DEFAULT_PROFILE),
+  symptoms: { chestPain: false, armJaw: false, breath: false, sweat: false, dizzy: false },
+  history: [],        // earlier days from the server: { date, restMean, flagged }
+  live: [],           // saved readings from the last 6 hours
+  mode: 'live',       // 'live' = your saved readings, 'demo' = a practice day (not saved)
+  score: null, recent: [], hasSample: false,
+  readings: [],
+  clock: Date.now(),
+  ev: { level: -1, findings: [], metrics: {} },
+  alertShown: false,
+  sim: { timer: null, queue: [], name: null, speed: 2 }
+};
+
+function baseline() {
+  const days = S.history.filter(d => !d.flagged).slice(-14);
+  if (days.length < 5) {
+    // Not enough saved days yet: use the resting pulse the person entered in their profile
+    const r = +S.profile.restingBpm;
+    return r ? { mean: r, sd: 3, lo: r - 6, hi: r + 6, n: 0, provisional: true } : null;
+  }
+  const vals = days.map(d => d.restMean);
+  const m = mean(vals), sd = Math.max(3, stdev(vals));
+  return { mean: m, sd, lo: m - 2 * sd, hi: m + 2 * sd, n: days.length };
+}
+
+/* ============ demo scenarios ============ */
+function restSeq(r, n) { return Array.from({ length: n }, () => ({ bpm: Math.round(BASE + (r() - 0.5) * 5), state: 'resting' })); }
+const SCENARIOS = {
+  normal() {
+    const r = rng(11), out = restSeq(r, 14);
+    [74, 84, 92, 97, 99, 101, 98, 100, 96, 99, 95, 90, 82, 76].forEach(b => out.push({ bpm: b + Math.round((r() - 0.5) * 3), state: 'active' }));
+    [72, 70, 68, 67].forEach(b => out.push({ bpm: b, state: 'resting' }));
+    return out.concat(restSeq(r, 16));
+  },
+  workout() {
+    const r = rng(23), out = restSeq(r, 10);
+    [78, 92, 108, 121, 133].forEach(b => out.push({ bpm: b, state: 'active' }));
+    for (let i = 0; i < 20; i++) out.push({ bpm: Math.round(144 + 12 * Math.sin(i / 3) + (i > 12 ? 6 : 0) + (r() - 0.5) * 4), state: 'active' });
+    [150, 138, 124, 112, 102, 94, 88, 83, 79, 77].forEach(b => out.push({ bpm: b, state: 'active' }));
+    [75, 73, 71, 70, 69, 68, 67, 66, 66, 65].forEach(b => out.push({ bpm: b, state: 'resting' }));
+    return out;
+  },
+  episode() {
+    const r = rng(5), out = restSeq(r, 8);
+    [70, 76, 85, 96, 104, 111, 117, 123, 128, 133, 137, 140, 143, 141, 145, 148, 146, 150, 152, 149, 151, 153]
+      .forEach(b => out.push({ bpm: b + Math.round((r() - 0.5) * 2), state: 'resting' }));
+    return out;
+  }
+};
+
+/* ============ rules engine ============ */
+function riskFactors() {
+  const p = S.profile, out = [];
+  if ((+p.age || 0) >= 55) out.push('age 55 or over');
+  if (p.hypertension) out.push('high blood pressure');
+  if (p.diabetes) out.push('diabetes');
+  if (p.heartDisease) out.push('earlier heart problem');
+  if (p.smoker) out.push('smoker');
+  return out;
+}
+function alertLevelBpm() { return riskFactors().length >= 2 ? 95 : 100; }
+
+function evaluate() {
+  const rs = S.readings, p = S.profile;
+  const age = clamp(Math.round(+p.age) || 40, 1, 110);
+  const maxHR = 220 - age;
+  const risk = riskFactors();
+  const sed = alertLevelBpm();
+  const urg = risk.length >= 2 ? 110 : 120;
+  const base = baseline();
+  const F = [];
+  const add = (level, title, detail) => F.push({ level, title, detail });
+  const metrics = {};
+
+  if (rs.length) {
+    const last = rs[rs.length - 1];
+    const rest = rs.filter(r => r.state === 'resting');
+    metrics.latest = last.bpm; metrics.state = last.state; metrics.count = rs.length;
+    metrics.max = Math.max(...rs.map(r => r.bpm)); metrics.min = Math.min(...rs.map(r => r.bpm));
+    metrics.restAvg = rest.length ? Math.round(mean(rest.map(r => r.bpm))) : null;
+
+    // trailing run of resting readings
+    const run = [];
+    for (let i = rs.length - 1; i >= 0 && rs[i].state === 'resting'; i--) run.unshift(rs[i]);
+
+    // R1: sustained fast pulse while resting
+    let high = 0;
+    for (let i = run.length - 1; i >= 0 && run[i].bpm > sed; i--) high++;
+    if (high >= 5) {
+      if (run.slice(-5).every(r => r.bpm > urg)) add(2, 'Very fast pulse while resting', `The last 5 readings were all above ${urg} bpm with no activity (latest ${last.bpm}).`);
+      else add(1, 'Fast pulse while resting', `${high} readings in a row above ${sed} bpm with no activity (latest ${last.bpm}).`);
+    }
+    // R2: sudden jump
+    if (run.length >= 4) {
+      const a = run[run.length - 4].bpm, b = last.bpm;
+      if (b - a >= 30 && b > 90) add(1, 'Pulse jumped while resting', `Up ${b - a} bpm in 3 readings (${a} to ${b}) with no activity.`);
+    }
+    // R3: compared with your own normal
+    if (base && run.length >= 4) {
+      const avg = mean(run.slice(-5).map(r => r.bpm));
+      const delta = avg - base.mean, z = delta / base.sd;
+      if (delta >= 40) add(2, 'Far above your usual', `Resting pulse averages ${Math.round(avg)} bpm over the last readings. Your usual is ${Math.round(base.mean)} (${Math.round(delta)} higher).`);
+      else if (delta >= 15 && z >= 2.5) add(1, 'Higher than your usual', `Resting pulse averages ${Math.round(avg)} bpm over the last readings. Your usual is ${Math.round(base.mean)} (${Math.round(delta)} higher).`);
+      else if (delta <= -20 && z <= -3 && !p.betaBlocker) add(1, 'Lower than your usual', `Resting pulse averages ${Math.round(avg)} bpm. Your usual is ${Math.round(base.mean)}.`);
+    }
+    // R4: above estimated maximum for age
+    if (rs.length >= 2 && rs[rs.length - 2].bpm > maxHR && last.bpm > maxHR) {
+      add(last.state === 'resting' ? 2 : 1, 'Above the estimated maximum for your age', `Estimated maximum is ${maxHR} bpm (220 minus age, a rough rule). The last two readings were above it.`);
+    }
+    // R5: very slow pulse
+    if (!p.betaBlocker && run.length >= 3 && run.slice(-3).every(r => r.bpm < 45)) {
+      add(1, 'Very slow pulse', `The last 3 resting readings were below 45 bpm. This can be normal for trained athletes.`);
+    }
+  }
+
+  // R6: symptoms
+  const sy = S.symptoms;
+  const others = ['armJaw', 'breath', 'sweat', 'dizzy'].filter(k => sy[k]).length;
+  const cur = Math.max(0, ...F.map(f => f.level));
+  if (sy.chestPain) add(2, 'Chest pain, pressure or tightness', 'This needs urgent medical attention whatever the pulse shows.');
+  else if (others >= 2) add(2, 'Several symptoms at once', 'More than one warning symptom together needs urgent medical attention.');
+  else if (others === 1) add(cur >= 1 ? 2 : 1, cur >= 1 ? 'A symptom together with an unusual pulse' : 'A warning symptom', cur >= 1 ? 'A symptom plus an unusual pulse is a reason to get checked now.' : 'Rest, and get checked if it continues or gets worse.');
+
+  // reassuring notes (level 0)
+  if (rs.length) {
+    const last = rs[rs.length - 1];
+    if (last.state === 'active') add(0, 'Raised pulse while active', `${last.bpm} bpm during activity is expected. The estimated maximum for your age is ${maxHR}.`);
+    else if (base && F.every(f => f.level === 0)) add(0, 'Resting pulse looks like your usual', `Latest ${last.bpm} bpm. Your usual resting range is ${Math.round(base.lo)} to ${Math.round(base.hi)} bpm (from ${base.n} days).`);
+    if (!base) add(0, 'Not enough history yet', 'Comparison with your own normal starts after 5 saved days.');
+  }
+
+  F.sort((a, b) => b.level - a.level);
+  const flagged = F.filter(f => f.level > 0);
+  let level = rs.length || flagged.length ? 0 : -1;
+  if (flagged.length) level = Math.max(...flagged.map(f => f.level));
+  return { level, findings: F, metrics, maxHR, sed, urg };
+}
+
+/* ============ rendering: status ============ */
+const LEVELS = {
+  '-1': { tag: 'Waiting for readings', title: 'No readings yet', sub: 'Type in a pulse reading, or play a demo day.' },
+  '0': { tag: 'No anomalies detected', title: 'No unusual patterns found', sub: 'That is not a clean bill of health. If you feel unwell, get checked.' },
+  '1': { tag: 'Watch closely', title: 'Something looks different', sub: 'Rest for a few minutes and measure again. If it continues, or you feel unwell, see a doctor.' },
+  '2': { tag: 'Seek medical help', title: 'Get medical help now', sub: 'Call a doctor or emergency services (112 in India). Do not wait to see if it settles.' }
+};
+function renderStatus() {
+  const e = S.ev, L = LEVELS[e.level];
+  $('status').dataset.level = e.level; $('strip').dataset.level = e.level;
+  $('statusTag').textContent = L.tag; $('statusTitle').textContent = L.title; $('statusSub').textContent = L.sub;
+  const ul = $('findings'); ul.replaceChildren();
+  e.findings.forEach(f => {
+    const name = ['OK', 'Watch', 'Alert'][f.level];
+    ul.append(el('li', null, el('span', { class: 'badge l' + f.level }, name), el('b', null, f.title), el('span', { class: 'why' }, f.detail)));
+  });
+  if (renderStatus.last !== e.level) {
+    if (renderStatus.last !== undefined) $('srLive').textContent = 'Status changed: ' + L.title + '. ' + L.sub;
+    renderStatus.last = e.level;
+  }
+}
+
+function renderMonitor() {
+  const m = S.ev.metrics;
+  if (!S.readings.length) {
+    $('bpm').textContent = '--'; $('stateChip').hidden = true; ecg.target = null;
+    $('heart').style.animationPlayState = 'paused';
+    return;
+  }
+  const last = S.readings[S.readings.length - 1];
+  $('bpm').textContent = last.bpm;
+  const chip = $('stateChip'); chip.hidden = false; chip.textContent = last.state === 'resting' ? 'Resting' : 'Active'; chip.className = 'chip ' + last.state;
+  ecg.target = last.bpm;
+  $('heart').style.setProperty('--beat', (60 / clamp(last.bpm, 30, 220)).toFixed(2) + 's');
+  $('heart').style.animationPlayState = 'running';
+}
+
+/* ============ trend chart ============ */
+function fit(c) {
+  const r = c.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  const w = Math.max(10, Math.round(r.width)), h = Math.max(10, Math.round(r.height));
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  c.getContext('2d').setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { w, h };
+}
+function drawTrend() {
+  const c = $('trend'), { w, h } = fit(c), ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  const pad = { l: 40, r: 12, t: 12, b: 28 }, pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+  const data = S.readings.slice(-60), base = baseline();
+  const ymin = 40, ymax = Math.max(160, ...data.map(d => d.bpm + 10));
+  const X = i => pad.l + (i / 59) * pw, Y = v => pad.t + (1 - (v - ymin) / (ymax - ymin)) * ph;
+  ctx.font = '13px ' + css('--body'); ctx.textBaseline = 'middle';
+  // grid
+  ctx.lineWidth = 1;
+  for (let v = 40; v <= ymax; v += 20) {
+    ctx.strokeStyle = 'rgba(206,84,84,.22)'; ctx.beginPath(); ctx.moveTo(pad.l, Y(v)); ctx.lineTo(w - pad.r, Y(v)); ctx.stroke();
+    ctx.fillStyle = css('--muted'); ctx.textAlign = 'right'; ctx.fillText(v, pad.l - 6, Y(v));
+  }
+  // usual range
+  if (base) { ctx.fillStyle = 'rgba(13,107,98,.16)'; ctx.fillRect(pad.l, Y(base.hi), pw, Y(base.lo) - Y(base.hi)); ctx.strokeStyle = 'rgba(13,107,98,.45)'; ctx.strokeRect(pad.l + .5, Y(base.hi), pw - 1, Y(base.lo) - Y(base.hi)); }
+  // alert level
+  const sed = alertLevelBpm();
+  ctx.setLineDash([6, 5]); ctx.strokeStyle = css('--watch'); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(pad.l, Y(sed)); ctx.lineTo(w - pad.r, Y(sed)); ctx.stroke(); ctx.setLineDash([]);
+  if (!data.length) {
+    ctx.fillStyle = css('--muted'); ctx.textAlign = 'center'; ctx.font = '17px ' + css('--body');
+    ctx.fillText('No readings yet. Play a demo day or add a reading.', pad.l + pw / 2, pad.t + ph / 2);
+    $('trendText').textContent = 'No readings yet.'; return;
+  }
+  // line
+  ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.beginPath();
+  data.forEach((d, i) => { i ? ctx.lineTo(X(i), Y(d.bpm)) : ctx.moveTo(X(i), Y(d.bpm)); }); ctx.stroke();
+  // points
+  data.forEach((d, i) => {
+    const x = X(i), y = Y(d.bpm);
+    if (d.state === 'resting') { ctx.fillStyle = css('--ok'); ctx.beginPath(); ctx.arc(x, y, 3.6, 0, 6.2832); ctx.fill(); }
+    else { ctx.fillStyle = css('--info'); ctx.beginPath(); ctx.moveTo(x, y - 4.8); ctx.lineTo(x + 4.8, y); ctx.lineTo(x, y + 4.8); ctx.lineTo(x - 4.8, y); ctx.closePath(); ctx.fill(); }
+  });
+  // latest ring
+  const li = data.length - 1; ctx.strokeStyle = css('--ink'); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(X(li), Y(data[li].bpm), 8, 0, 6.2832); ctx.stroke();
+  // x labels
+  ctx.fillStyle = css('--muted'); ctx.textBaseline = 'alphabetic'; ctx.font = '13px ' + css('--body');
+  ctx.textAlign = 'left'; ctx.fillText(fmtTime(data[0].t), pad.l, h - 6);
+  ctx.textAlign = 'right'; ctx.fillText(fmtTime(data[li].t), X(li) < w - 50 ? Math.min(w - pad.r, X(li) + 30) : w - pad.r, h - 6);
+  const lastR = data[li];
+  $('trendText').textContent = `${data.length} readings. Latest ${lastR.bpm} beats per minute, ${lastR.state}. Highest ${Math.max(...data.map(d => d.bpm))}, lowest ${Math.min(...data.map(d => d.bpm))}.`;
+}
+
+/* ============ ECG strip animation ============ */
+const ecg = { c: $('ecg'), buf: null, head: 0, phase: 0, cur: 70, target: null, last: 0, carry: 0, w: 0, h: 0, noise: rng(3) };
+function ecgShape(p) {
+  const g = (c, w, a) => a * Math.exp(-((p - c) ** 2) / (2 * w * w));
+  return g(0.14, 0.025, 0.12) + g(0.255, 0.007, -0.13) + g(0.275, 0.009, 1.0) + g(0.298, 0.008, -0.22) + g(0.5, 0.045, 0.25);
+}
+function ecgSetup() {
+  const { w, h } = fit(ecg.c);
+  if (w !== ecg.w || h !== ecg.h || !ecg.buf) { ecg.w = w; ecg.h = h; ecg.buf = new Float32Array(w).fill(NaN); ecg.head = 0; }
+}
+function ecgColor() { const l = S.ev.level; return l === 2 ? css('--alert') : l === 1 ? css('--watch') : css('--ink'); }
+function ecgDraw() {
+  const ctx = ecg.c.getContext('2d'), { w, h } = ecg;
+  ctx.clearRect(0, 0, w, h);
+  const mid = h * 0.68, amp = h * 0.56;
+  ctx.strokeStyle = ecgColor(); ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.beginPath(); let pen = false;
+  for (let x = 0; x < w; x++) {
+    const v = ecg.buf[x];
+    if (Number.isNaN(v)) { pen = false; continue; }
+    const y = mid - v * amp;
+    if (pen) ctx.lineTo(x + .5, y); else { ctx.moveTo(x + .5, y); pen = true; }
+  }
+  ctx.stroke();
+  if (ecg.target == null) {
+    ctx.fillStyle = css('--muted'); ctx.font = '16px ' + css('--body'); ctx.textAlign = 'center';
+    ctx.fillText('No signal yet. Add a reading to start the trace.', w / 2, h * 0.28);
+  }
+}
+function ecgAdvance(n) {
+  const speed = 140;
+  for (let i = 0; i < n; i++) {
+    if (ecg.target != null) { ecg.phase += (1 / speed) * (ecg.cur / 60); if (ecg.phase >= 1) ecg.phase -= 1; }
+    const y = ecg.target != null ? ecgShape(ecg.phase) + (ecg.noise() - 0.5) * 0.015 : (ecg.noise() - 0.5) * 0.01;
+    ecg.buf[ecg.head] = y; ecg.head = (ecg.head + 1) % ecg.w;
+    for (let k = 0; k < 14; k++) ecg.buf[(ecg.head + k) % ecg.w] = NaN;
+  }
+}
+function ecgFrame(ts) {
+  ecgSetup();
+  const dt = Math.min(0.05, (ts - ecg.last) / 1000 || 0); ecg.last = ts;
+  if (ecg.target != null) ecg.cur += (ecg.target - ecg.cur) * Math.min(1, dt * 2.5);
+  const px = ecg.carry + dt * 140, n = Math.floor(px); ecg.carry = px - n;
+  ecgAdvance(n); ecgDraw();
+  requestAnimationFrame(ecgFrame);
+}
+function ecgStatic() {
+  ecgSetup(); if (ecg.target != null) ecg.cur = ecg.target;
+  ecg.buf.fill(NaN); ecg.head = 0; ecg.phase = 0; ecgAdvance(ecg.w - 15); ecgDraw();
+}
+
+/* ============ baseline panel ============ */
+function renderBaseline() {
+  const base = baseline(), bars = $('bars'); bars.replaceChildren();
+  const days = S.history.slice(-14).map(d => ({ label: d.date, v: d.restMean, flag: d.flagged }));
+  const rest = S.readings.filter(r => r.state === 'resting');
+  if (rest.length >= 3) days.push({ label: 'Today', v: Math.round(mean(rest.map(r => r.bpm)) * 10) / 10, today: true });
+  const vmax = Math.max(100, ...days.map(d => d.v + 5)), vmin = 40;
+  days.forEach(d => {
+    const b = el('div', { class: 'bar' + (d.today ? ' today' : '') + (d.flag ? ' flag' : ''), title: `${d.label}: ${d.v} bpm resting` });
+    b.style.height = ((d.v - vmin) / (vmax - vmin) * 100) + '%'; bars.append(b);
+  });
+  bars.setAttribute('aria-label', 'Resting pulse for each recent day: ' + days.map(d => `${d.label} ${d.v}`).join(', '));
+  const t = $('baseText'); t.replaceChildren();
+  if (base) {
+    if (base.provisional) t.append('Until you have 5 days of records, your usual is based on the resting pulse you entered: ', el('b', null, `${Math.round(base.lo)} to ${Math.round(base.hi)} bpm`), '.');
+    else t.append('Your usual resting pulse is ', el('b', null, `${Math.round(base.lo)} to ${Math.round(base.hi)} bpm`), `, learned from the last ${base.n} days of your records.`);
+  } else t.textContent = 'Not enough saved days yet to learn your normal. Add readings, or add the sample records.';
+  $('barsNote').textContent = days.length ? 'Dark bar: today so far. Amber bars: flagged days, left out of your normal.' : '';
+}
+
+/* ============ readings ============ */
+function addReading(bpm, state) {
+  S.clock += 60000;
+  S.readings.push({ t: S.clock, bpm: Math.round(bpm), state });
+  if (S.readings.length > 600) S.readings.shift();
+  refresh();
+}
+function refresh() {
+  S.ev = evaluate();
+  renderStatus(); renderMonitor(); drawTrend(); renderBaseline();
+  if (reduceMotion) ecgStatic();
+  if (S.ev.level === 2) { if (!S.alertShown) { S.alertShown = true; openAlert(); raiseAlert(2); } } else S.alertShown = false;
+  if (S.ev.level === 1) { if (!S.watchShown) { S.watchShown = true; raiseAlert(1); } } else S.watchShown = false;
+}
+
+/* ============ simulation ============ */
+function setPressed(name) { document.querySelectorAll('.scn').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scn === name))); }
+function startScenario(name) {
+  stopSim(); S.mode = 'demo'; S.readings = []; S.alertShown = false; S.watchShown = false;
+  S.sim.queue = SCENARIOS[name](); S.sim.name = name;
+  S.clock = Math.floor(Date.now() / 60000) * 60000 - S.sim.queue.length * 60000;
+  setPressed(name); refresh(); playSim();
+}
+function tick() {
+  const r = S.sim.queue.shift();
+  if (!r) { stopSim(); return; }
+  addReading(r.bpm, r.state);
+  if (!S.sim.queue.length) stopSim(true);
+}
+function playSim() {
+  if (S.sim.timer || !S.sim.queue.length) return;
+  S.sim.timer = setInterval(tick, 700 / S.sim.speed); updatePlay();
+}
+function stopSim(done) { clearInterval(S.sim.timer); S.sim.timer = null; if (done) { S.sim.queue = []; } updatePlay(); }
+function updatePlay() {
+  const b = $('btnPlay'), running = !!S.sim.timer, has = S.sim.queue.length > 0;
+  b.disabled = !running && !has; b.textContent = running ? 'Pause' : (has ? 'Resume' : 'Pause');
+}
+
+/* ============ alert dialog ============ */
+function openAlert() {
+  const dlg = $('alertDlg'), list = $('dlgList'); list.replaceChildren();
+  S.ev.findings.filter(f => f.level >= 1).forEach(f => list.append(el('li', null, el('b', null, f.title + '. '), f.detail)));
+  const phone = (S.profile.contactPhone || '').replace(/[^0-9+]/g, '');
+  const cb = $('dlgContact');
+  if (phone) { cb.hidden = false; cb.href = 'tel:' + phone; cb.textContent = 'Call ' + (S.profile.contactName.trim() || 'my emergency contact'); } else cb.hidden = true;
+  if (!dlg.open) { try { dlg.showModal(); } catch (e) { dlg.setAttribute('open', ''); } }
+}
+$('dlgClose').addEventListener('click', () => $('alertDlg').close());
+
+/* ============ alerts: notify, then escalate to the emergency contact ============ */
+const AL = { cur: null, offset: 0, tick: null, poll: null, contactOk: false, contactName: '', settings: null };
+const mmss = ms => { const t = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+
+function osNotify(title, body) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try { new Notification(title, { body, tag: 'baseline-alert', requireInteraction: true }); } catch (e) { /* some phones only allow this from a service worker */ }
+}
+function initNotifButton() {
+  const b = $('btnNotif');
+  b.hidden = !('Notification' in window) || Notification.permission !== 'default';
+  b.onclick = async () => { try { await Notification.requestPermission(); } catch (e) {} b.hidden = Notification.permission !== 'default'; toast(Notification.permission === 'granted' ? 'Device notifications are on.' : 'Notifications stay off. The on-screen alert still works.'); };
+}
+
+async function raiseAlert(level) {
+  const reasons = S.ev.findings.filter(f => f.level >= 1).map(f => f.title + '. ' + f.detail);
+  const last = S.readings[S.readings.length - 1];
+  const { res, data } = await api('/api/alerts', { method: 'POST', body: { level, bpm: last && last.bpm, reasons, demo: S.mode === 'demo' } });
+  if (!res.ok || !data.alert) return;
+  if (!data.duplicate) osNotify(level === 2 ? 'Baseline: get medical help' : 'Baseline: unusual pattern', level === 2 ? 'Open Baseline and respond, or call 112 if you feel unwell.' : 'Your pulse looks unusual for you. Rest and measure again.');
+  if (level === 2) setAlert(data.alert);
+  loadHistory();
+}
+
+function setAlert(a) {
+  AL.cur = a; AL.offset = a.serverNow - Date.now();
+  renderAlert();
+  clearInterval(AL.tick); clearInterval(AL.poll);
+  if (a.status === 'active' || a.status === 'sending') {
+    AL.tick = setInterval(renderAlert, 1000);
+    AL.poll = setInterval(pollAlert, 3000);
+  }
+}
+async function pollAlert() {
+  const { res, data } = await api('/api/alerts');
+  if (!res.ok || !AL.cur) return;
+  const mine = (data.history || []).find(h => h.id === AL.cur.id);
+  if (mine) { const was = AL.cur.status; setAlert(mine); if (was !== mine.status) { loadHistory(); if (mine.status === 'escalated') osNotify('Baseline', 'We messaged ' + AL.contactName + ' because you did not respond.'); } }
+}
+function alertText(a) {
+  const who = AL.contactName || 'your emergency contact', demo = a.demo ? 'DEMO: ' : '';
+  if (a.status === 'active') {
+    const left = a.escalateAt ? mmss(a.escalateAt - (Date.now() + AL.offset)) : '';
+    return demo + 'Serious alert. If you do not respond, ' + who + ' will be sent a text in ' + left + '. Call 112 if you feel unwell.';
+  }
+  if (a.status === 'sending') return demo + 'Messaging ' + who + ' now…';
+  if (a.status === 'acknowledged') return demo + 'Okay. ' + who + ' was not messaged. If you feel unwell, still call 112.';
+  if (a.status === 'escalated') {
+    if (a.demo) return 'DEMO: ' + who + ' would have been texted now. No real message was sent.';
+    if (a.contactMode === 'simulated') return 'Messaging ' + who + ' is not switched on on this server (no SMS provider set), so NOTHING was sent. Call them yourself or call 112.';
+    return 'You did not respond, so ' + who + ' was sent a text message. Call 112 if you feel unwell.';
+  }
+  if (a.status === 'failed') return 'We could not message ' + who + (a.error ? ' (' + a.error + ')' : '') + '. Call them yourself or call 112.';
+  if (a.status === 'no_contact') return 'Serious alert. No one will be messaged because you have not added an emergency contact with consent. Call 112 or someone you trust.';
+  return '';
+}
+function renderAlert() {
+  const a = AL.cur, bar = $('alertBar');
+  if (!a || a.level !== 2) { bar.hidden = true; return; }
+  const active = a.status === 'active', canNow = AL.contactOk && (active || a.status === 'no_contact');
+  const txt = alertText(a);
+  $('alertMsg').replaceChildren(el('b', null, a.status === 'acknowledged' ? 'Stopped. ' : 'Alert. '), txt);
+  bar.classList.toggle('calm', a.status === 'acknowledged');
+  bar.hidden = false;
+  $('barOk').hidden = !active; $('barNow').hidden = !(active && AL.contactOk); $('barDismiss').hidden = active || a.status === 'sending';
+  $('dlgCountdown').textContent = active || a.status === 'sending' ? txt : '';
+  $('dlgOk').hidden = !active; $('dlgNow').hidden = !(active && AL.contactOk);
+}
+async function ackAlert() {
+  if (!AL.cur) return;
+  const { res, data } = await api('/api/alerts/' + AL.cur.id + '/ack', { method: 'POST' });
+  if (res.ok) { setAlert(data.alert); loadHistory(); if ($('alertDlg').open) $('alertDlg').close(); if (!data.changed) toast('That alert had already ended.'); }
+}
+async function messageNow() {
+  if (!AL.cur) return;
+  if (!confirm('Send a text message to ' + (AL.contactName || 'your emergency contact') + ' now?')) return;
+  const { res, data } = await api('/api/alerts/' + AL.cur.id + '/escalate', { method: 'POST' });
+  if (res.ok) { setAlert(data.alert); loadHistory(); } else toast((data && data.error) || 'Could not send the message.');
+}
+$('barOk').onclick = $('dlgOk').onclick = ackAlert;
+$('barNow').onclick = $('dlgNow').onclick = messageNow;
+$('barDismiss').onclick = () => { AL.cur = null; renderAlert(); };
+
+const OUTCOME = { logged: 'Watch recorded', active: 'Waiting for your response', sending: 'Messaging your contact…', acknowledged: 'You responded; contact not messaged', no_contact: 'No contact to message', failed: 'Could not message your contact' };
+async function loadHistory() {
+  const { res, data } = await api('/api/alerts');
+  if (!res.ok) return;
+  const list = $('histList'); list.replaceChildren();
+  if (!data.history.length) { list.append(el('li', null, 'No alerts yet.')); return; }
+  for (const a of data.history) {
+    let out = OUTCOME[a.status] || a.status;
+    if (a.status === 'escalated') out = a.demo ? 'Demo: contact would have been texted' : a.contactMode === 'simulated' ? 'Contact NOT messaged (SMS not switched on)' : 'Contact was texted';
+    list.append(el('li', null,
+      el('span', { class: 'when' }, new Date(a.createdAt).toLocaleString()),
+      el('span', { class: 'badge l' + a.level }, a.level === 2 ? 'Get medical help' : 'Watch'),
+      el('span', null, (a.bpm ? a.bpm + ' bpm · ' : '') + (a.demo ? 'demo · ' : '') + out)));
+  }
+}
+async function initAlerts(me) {
+  AL.settings = me.settings;
+  const c = me.profile && me.profile.contact;
+  AL.contactOk = !!(c && c.consent); AL.contactName = c ? c.name : '';
+  initNotifButton();
+  const { res, data } = await api('/api/alerts');
+  if (res.ok && data.active) setAlert(data.active);
+  loadHistory();
+}
+
+/* ============ symptoms, profile ============ */
+document.querySelectorAll('[data-sym]').forEach(cb => cb.addEventListener('change', () => { S.symptoms[cb.dataset.sym] = cb.checked; refresh(); }));
+// Medicines that slow the pulse (beta blockers and a few others). Matched on the name the person typed.
+const SLOWING_RE = /olol\b|carvedilol|diltiazem|verapamil|digoxin|ivabradine|clonidine/i;
+
+function applyServerProfile(sp) {
+  const c = sp.conditions || [], meds = sp.medications || [];
+  const slowing = meds.map(m => m.name).filter(n => SLOWING_RE.test(n));
+  Object.assign(S.profile, {
+    age: sp.age, restingBpm: sp.restingBpm,
+    hypertension: c.includes('high_blood_pressure'),
+    diabetes: c.includes('diabetes'),
+    heartDisease: c.includes('heart_disease') || c.includes('previous_heart_attack') || c.includes('irregular_heartbeat'),
+    betaBlocker: slowing.length > 0,
+    contactName: sp.contact ? sp.contact.name : '',
+    contactPhone: sp.contact ? sp.contact.phone : ''
+  });
+  const line = $('profileLine'), bits = ['Age ' + sp.age];
+  const labels = { heart_disease: 'heart disease', previous_heart_attack: 'previous heart attack', irregular_heartbeat: 'irregular heartbeat', high_blood_pressure: 'high blood pressure', diabetes: 'diabetes', thyroid_disorder: 'thyroid disorder', anemia: 'anemia', kidney_disease: 'kidney disease' };
+  c.filter(x => labels[x]).forEach(x => bits.push(labels[x]));
+  if (slowing.length) bits.push('pulse-slowing medicine: ' + slowing.join(', '));
+  line.textContent = 'Using your profile: ' + bits.join(' · ');
+  const a = el('a', null, 'Edit profile'); a.href = '/profile.html'; line.append(a);
+  line.hidden = false;
+}
+
+async function loadProfile() {
+  try {
+    const res = await fetch('/api/me');
+    if (res.status === 401) { location.href = '/login.html'; return; }
+    const me = await res.json(); const { profile } = me;
+    if (!profile) { location.href = '/profile.html'; return; }
+    applyServerProfile(profile);
+    initAlerts(me);
+    await loadSummary();
+  } catch (e) { /* offline: keep default profile */ }
+}
+
+/* ============ controls ============ */
+document.querySelectorAll('.scn').forEach(b => b.addEventListener('click', () => startScenario(b.dataset.scn)));
+$('btnPlay').addEventListener('click', () => { if (S.sim.timer) stopSim(); else playSim(); });
+$('speed').addEventListener('change', e => { S.sim.speed = +e.target.value; if (S.sim.timer) { stopSim(); playSim(); } });
+$('btnClear').addEventListener('click', () => { useLive(); refresh(); if (!S.readings.length) ecg.target = null; });
+$('manual').addEventListener('submit', async e => {
+  e.preventDefault();
+  const v = Number($('mBpm').value), err = $('mErr'), state = $('mState').value;
+  if (!Number.isFinite(v) || $('mBpm').value === '' || v < 20 || v > 250) { err.textContent = 'Enter a pulse between 20 and 250 beats per minute.'; $('mBpm').focus(); return; }
+  err.textContent = '';
+  $('mBpm').value = ''; $('mBpm').focus();
+  const ok = await recordReading(v, state, 'manual', null);
+  if (!ok) err.textContent = 'Could not save this reading. Please try again.';
+});
+
+/* ============ saved records, heart score ============ */
+const tzMin = () => new Date().getTimezoneOffset();
+async function api(path, opts = {}) {
+  const init = { method: opts.method || 'GET', headers: {} };
+  if (opts.body) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(opts.body); }
+  try {
+    const res = await fetch(path, init);
+    if (res.status === 401) { location.href = '/login.html'; return { res, data: {} }; }
+    return { res, data: await res.json().catch(() => ({})) };
+  } catch (e) { return { res: { ok: false, status: 0 }, data: { error: 'Could not reach the server.' } }; }
+}
+
+function useLive() {
+  if (S.mode !== 'demo') return;
+  stopSim(true); S.mode = 'live'; S.alertShown = false; S.watchShown = false; setPressed('');
+  S.readings = S.live.map(r => Object.assign({}, r));
+}
+
+// Add one reading: the alert rules look at it first, then it is saved to the person's records.
+async function recordReading(bpm, state, source, quality) {
+  bpm = Math.round(bpm);
+  useLive();
+  S.clock = Date.now();
+  S.readings.push({ t: S.clock, bpm, state });
+  refresh();
+  const level = Math.max(0, S.ev.level);
+  const { res } = await api('/api/readings', { method: 'POST', body: { bpm, state, source, level, quality } });
+  if (!res.ok) { toast('Could not save this reading.'); return false; }
+  toast('Saved to your records.');
+  await loadSummary();
+  return true;
+}
+
+async function loadSummary() {
+  const { res, data } = await api('/api/summary?tz=' + tzMin());
+  if (!res.ok) return;
+  S.history = data.days.filter(d => d.restMean != null && d.nResting >= 2).map(d => ({ date: d.date, restMean: d.restMean, flagged: d.flagged }));
+  S.live = data.live; S.recent = data.recent; S.score = data.score; S.hasSample = data.hasSample; S.total = data.total;
+  if (S.mode === 'live') { S.readings = S.live.map(r => Object.assign({}, r)); S.clock = Date.now(); }
+  renderScore(); renderRecords(); refresh();
+}
+
+function renderScore() {
+  const box = $('scoreBody'), sc = S.score; box.replaceChildren();
+  if (!sc) return;
+  if (!sc.ready) {
+    box.append(el('p', null, 'Your heart score appears once there are at least ', el('b', null, `${sc.need.readings} resting readings on ${sc.need.days} different days`), '.'));
+    const pct = Math.round(Math.min(100, (sc.have.readings / sc.need.readings * 50) + (sc.have.days / sc.need.days * 50)));
+    const bar = el('div', { class: 'progress', role: 'img', 'aria-label': `${pct} percent of the records needed` }); const i = el('i'); i.style.width = pct + '%'; bar.append(i);
+    box.append(bar, el('p', { class: 'hint' }, `So far: ${sc.have.readings} resting reading${sc.have.readings === 1 ? '' : 's'} on ${sc.have.days} day${sc.have.days === 1 ? '' : 's'}. Take a camera measurement or type readings in, or add sample records to see how the score works.`));
+    return;
+  }
+  const colour = sc.score >= 80 ? 'var(--ok)' : sc.score >= 60 ? 'var(--watch)' : 'var(--alert)';
+  const C = 2 * Math.PI * 52;
+  const ring = el('div', { class: 'ring', role: 'img', 'aria-label': `Heart score ${sc.score} out of 100` });
+  ring.innerHTML = `<svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="52" fill="none" stroke="#efe3e1" stroke-width="12"/><circle cx="60" cy="60" r="52" fill="none" stroke="${colour}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(sc.score / 100 * C).toFixed(1)} ${C.toFixed(1)}"/></svg>`;
+  ring.append(el('div', { class: 'num' }, String(sc.score)));
+  const side = el('div', null, el('div', { class: 'band', style: 'color:' + colour }, sc.band),
+    el('p', { class: 'hint' }, `Out of 100. Based on ${sc.basis.readings} resting readings over ${sc.basis.days} days${sc.basis.includesSample ? ' (includes sample records)' : ''}.`));
+  box.append(el('div', { class: 'score-wrap' }, ring, side));
+  const ul = el('ul', { class: 'parts' });
+  sc.components.forEach(c => {
+    const m = el('div', { class: 'meter' }); const i = el('i'); i.style.width = (c.points / c.max * 100) + '%'; m.append(i);
+    ul.append(el('li', null, el('b', null, c.label), el('span', null, `${c.points} / ${c.max}`), m, el('span', { class: 'why' }, c.note)));
+  });
+  box.append(ul);
+  sc.caps.forEach(t => box.append(el('p', { class: 'cap' }, t)));
+  box.append(el('p', { class: 'hint', style: 'margin-top:12px' }, 'A summary of your own pulse records over the last 14 days. It is not a medical measure, and a high score does not mean your heart is healthy.'));
+}
+
+function renderRecords() {
+  const body = $('recBody'); body.replaceChildren();
+  const src = { manual: 'Typed in', camera: 'Camera', sample: 'Sample' };
+  S.recent.forEach(r => {
+    const when = new Date(r.t).toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const lv = r.level === 2 ? el('span', { class: 'tag l2' }, 'Alert') : r.level === 1 ? el('span', { class: 'tag l1' }, 'Watch') : el('span', null, '–');
+    const del = el('button', { class: 'del', type: 'button', 'aria-label': `Delete the ${r.bpm} bpm reading from ${when}` }, 'Delete');
+    del.addEventListener('click', () => deleteReading(r.id, r.bpm, when));
+    const srcText = (src[r.source] || r.source) + (r.source === 'camera' && r.quality ? (r.quality === 'good' ? ' (consistent)' : ' (provisional)') : '');
+    body.append(el('tr', null, el('td', null, when), el('td', { class: 'b' }, r.bpm + ' bpm'), el('td', null, r.state === 'resting' ? 'Resting' : 'Active'), el('td', null, srcText), el('td', null, lv), el('td', null, del)));
+  });
+  $('recEmpty').hidden = S.recent.length > 0;
+  $('recTable').hidden = S.recent.length === 0;
+  $('recSub').textContent = S.total ? `${S.total} saved reading${S.total === 1 ? '' : 's'} in the last 31 days. Showing the latest ${S.recent.length}.` : 'Every reading you add is saved to your account.';
+  $('btnSample').hidden = S.hasSample; $('btnNoSample').hidden = !S.hasSample;
+}
+async function deleteReading(id, bpm, when) {
+  if (!confirm(`Delete the ${bpm} bpm reading from ${when}? Your heart score and "your normal" will be recalculated without it.`)) return;
+  const { res } = await api('/api/readings/' + id, { method: 'DELETE' });
+  if (res.ok) { toast('Reading deleted.'); await loadSummary(); } else toast('Could not delete that reading.');
+}
+$('btnDeleteAll').addEventListener('click', async () => {
+  if (!S.total) { toast('There are no records to delete.'); return; }
+  if (!confirm(`Delete all ${S.total} of your saved readings (including sample records)? This cannot be undone. Your profile stays.`)) return;
+  const { res, data } = await api('/api/readings', { method: 'DELETE' });
+  if (res.ok) { toast(`Deleted ${data.deleted} reading${data.deleted === 1 ? '' : 's'}.`); await loadSummary(); } else toast('Could not delete your records.');
+});
+$('btnLogout').addEventListener('click', async () => { camScanner.stop(); await api('/api/logout', { method: 'POST' }); location.href = '/login.html'; });
+$('btnSample').addEventListener('click', async () => {
+  const { res } = await api('/api/readings/sample', { method: 'POST', body: { tz: tzMin() } });
+  if (res.ok) { toast('Sample records added.'); await loadSummary(); } else toast('Could not add sample records.');
+});
+$('btnNoSample').addEventListener('click', async () => {
+  const { res } = await api('/api/readings/sample', { method: 'DELETE' });
+  if (res.ok) { toast('Sample records removed.'); await loadSummary(); }
+});
+
+/* ============ AI chat (the key is on the server) ============ */
+const chat = { msgs: [], busy: false };
+const GREETING = 'Hello. Ask me about your pulse records, your heart score or what an alert means. I can explain things, but I cannot diagnose. If you have chest pain or feel faint, call 112.';
+function bubble(kind, text) {
+  const d = el('div', { class: 'msg ' + kind }); d.textContent = text;
+  const log = $('chatLog'); log.append(d); log.scrollTop = log.scrollHeight; return d;
+}
+function chatReset() { chat.msgs = []; $('chatLog').replaceChildren(); bubble('bot', GREETING); }
+function chatContext() {
+  const e = S.ev, base = baseline();
+  return {
+    alertLevel: e.level >= 0 ? LEVELS[e.level].title : null,
+    findings: e.findings.filter(f => f.level > 0).map(f => ({ title: f.title, detail: f.detail })),
+    symptomsNow: Object.keys(S.symptoms).filter(k => S.symptoms[k]),
+    usualRestingRange: base ? { low: base.lo, high: base.hi } : null
+  };
+}
+async function sendChat(text) {
+  text = text.trim(); if (!text || chat.busy) return;
+  chat.busy = true; $('chatSend').disabled = true;
+  bubble('me', text); chat.msgs.push({ role: 'user', content: text });
+  const wait = bubble('sys', 'Thinking…');
+  const { res, data } = await api('/api/chat', { method: 'POST', body: { messages: chat.msgs.slice(-10), tz: tzMin(), context: chatContext() } });
+  wait.remove();
+  if (data.note) bubble('warn', data.note);
+  if (res.ok && data.reply) { bubble('bot', data.reply); chat.msgs.push({ role: 'assistant', content: data.reply }); }
+  else { bubble('sys', data.error || 'Something went wrong. Please try again.'); chat.msgs.pop(); }
+  chat.busy = false; $('chatSend').disabled = false; $('chatInput').focus();
+}
+$('chatForm').addEventListener('submit', e => { e.preventDefault(); const t = $('chatInput').value; $('chatInput').value = ''; sendChat(t); });
+$('chatInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('chatForm').requestSubmit(); } });
+document.querySelectorAll('#chips .chip-btn').forEach(b => b.addEventListener('click', () => sendChat(b.textContent)));
+$('chatNew').addEventListener('click', chatReset);
+chatReset();
+
+/* ============ phone-camera pulse scanner ============
+   Measurement code is the scanner supplied by the team (Ctrl Alt Elite); only the ids and the
+   save step were changed. It runs entirely in the browser: the video never leaves the phone. */
+const camScanner = (function (opts) {
+  const CONFIG = {
+        targetRate: 15, 
+        sampleIntervalMs: 50,
+        minSignalSeconds: 10,
+        targetSignalSeconds: 18,
+        maxSessionMs: 50000,
+        fingerStableMs: 900,
+        fingerLossGraceMs: 220,
+        minBpm: 42,
+        maxBpm: 200,
+        lowCutHz: 0.65,
+        highCutHz: 3.3,
+        analysisIntervalMs: 1800
+      };
+
+      const $ = id => document.getElementById(id);
+      const dom = {
+        measureBtn: $('camMeasureBtn'), cameraPanel: $('camCameraPanel'), statusMsg: $('camStatusMsg'), fingerGuide: $('camFingerGuide'),
+        video: $('camCameraVideo'), videoOverlayText: $('camVideoOverlayText'), signalQuality: $('camSignalQuality'), signalQualityText: $('camSignalQualityText'),
+        bpmValue: $('camBpmValue'), bpmUnit: $('camBpmUnit'), waveformCanvas: $('camWaveformCanvas'), progressFill: $('camProgressFill'),
+        progressLabel: $('camProgressLabel'), progressTime: $('camProgressTime'), stopBtn: $('camStopBtn'), torchBtn: $('camTorchBtn'),
+        processCanvas: $('camProcessCanvas'),
+        diagChannel: $('camDiagChannel'), diagRate: $('camDiagRate'), diagScore: $('camDiagScore'), diagAgreement: $('camDiagAgreement')
+      };
+      const processCtx = dom.processCanvas.getContext('2d', { willReadFrequently: true });
+      let stream = null;
+      let measuring = false;
+      let torchOn = false;
+      let frameCallbackId = null;
+      let animationFrameId = null;
+      let sessionStartedAt = 0;
+      let collectionStartedAt = null;
+      let firstFingerAt = null;
+      let fingerLostAt = null;
+      let lastSampleAt = -Infinity;
+      let lastVideoTime = -1;
+      let lastAnalysisAt = 0;
+      let samples = [];
+      let recentEstimates = [];
+      let latestResult = null;
+      let torchTrack = null;
+
+      function showStatus(message, type = 'info') {
+        dom.statusMsg.textContent = message;
+        dom.statusMsg.className = `cam-status ${type} visible`;
+      }
+      function hideStatus() { dom.statusMsg.className = 'cam-status'; dom.statusMsg.textContent = ''; }
+      function setQuality(level, message) {
+        dom.signalQuality.className = `cam-quality ${level}`;
+        dom.signalQualityText.textContent = message;
+      }
+      function resetResult() {
+        dom.bpmValue.textContent = '— — —';
+        dom.bpmValue.className = 'cam-bpm';
+        dom.bpmUnit.hidden = true;
+        dom.diagChannel.textContent = '—';
+        dom.diagScore.textContent = '—';
+        dom.diagAgreement.textContent = '—';
+        setQuality('poor', 'Waiting for stable signal');
+      }
+      function clearCollection() {
+        samples = [];
+        recentEstimates = [];
+        latestResult = null;
+        collectionStartedAt = null;
+        firstFingerAt = null;
+        fingerLostAt = null;
+        lastSampleAt = -Infinity;
+        lastAnalysisAt = 0;
+        resetResult();
+        dom.progressFill.style.width = '0%';
+        dom.progressTime.textContent = `0s / ${CONFIG.targetSignalSeconds}s`;
+        dom.progressLabel.textContent = 'Place finger and hold still…';
+      }
+
+      async function startMeasurement() {
+        if (measuring) return;
+        if (!navigator.mediaDevices?.getUserMedia) {
+          dom.cameraPanel.classList.add('visible');
+          showStatus('Camera access is unavailable. Open this page on HTTPS or localhost in a modern browser.', 'error');
+          return;
+        }
+        measuring = true;
+        dom.cameraPanel.classList.add('visible');
+        dom.measureBtn.disabled = true;
+        dom.measureBtn.textContent = '⏳ Starting camera…';
+        dom.stopBtn.hidden = false;
+        dom.torchBtn.hidden = true;
+        hideStatus();
+        clearCollection();
+        sessionStartedAt = performance.now();
+        lastVideoTime = -1;
+
+        try {
+          let mediaConstraints = {
+            audio: false,
+            video: {
+              facingMode: { ideal: 'environment' },
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              frameRate: { ideal: 30, min: 15 }
+            }
+          };
+          try {
+            stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+          } catch (firstError) {
+            // Some devices do not honor the ideal rear-facing constraint. Retry with a generic camera.
+            if (firstError.name === 'NotAllowedError' || firstError.name === 'SecurityError') throw firstError;
+            stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { width: { ideal: 640 }, height: { ideal: 480 } } });
+          }
+          dom.video.srcObject = stream;
+          await new Promise((resolve, reject) => {
+            if (dom.video.readyState >= 2) return resolve();
+            const onReady = () => { cleanup(); resolve(); };
+            const onError = () => { cleanup(); reject(new Error('Camera video could not start.')); };
+            const cleanup = () => { dom.video.removeEventListener('loadeddata', onReady); dom.video.removeEventListener('error', onError); };
+            dom.video.addEventListener('loadeddata', onReady, { once: true });
+            dom.video.addEventListener('error', onError, { once: true });
+          });
+          await dom.video.play();
+          dom.measureBtn.textContent = '📷 Measuring…';
+          dom.videoOverlayText.textContent = 'Cover the rear camera and flash with your finger';
+          dom.torchBtn.hidden = false;
+          torchTrack = stream.getVideoTracks()[0] || null;
+          try {
+            await toggleTorch(true);
+          } catch (_) {
+            torchOn = false;
+            dom.videoOverlayText.textContent = 'Camera active — flashlight may need manual enabling';
+          }
+          requestNextFrame();
+        } catch (error) {
+          console.error('Camera start failed:', error);
+          let message = 'Could not start the camera. Please try again.';
+          if (error.name === 'NotAllowedError' || error.name === 'SecurityError') message = 'Camera permission was denied or unavailable. Allow camera access and reopen the scanner.';
+          else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') message = 'No usable camera was found on this device.';
+          else if (error.name === 'NotReadableError') message = 'The camera may be in use by another app. Close other camera apps and retry.';
+          showStatus(message, 'error');
+          stopMeasurement(false);
+        }
+      }
+
+      async function toggleTorch(forceOn = null) {
+        if (!torchTrack) throw new Error('No camera track');
+        const requested = forceOn === null ? !torchOn : forceOn;
+        await torchTrack.applyConstraints({ advanced: [{ torch: requested }] });
+        torchOn = requested;
+        dom.torchBtn.textContent = torchOn ? '🔦 Turn off flashlight' : '🔦 Turn on flashlight';
+        dom.videoOverlayText.textContent = torchOn ? 'Camera and flash active — keep finger still' : 'Camera active — flashlight off';
+        return true;
+      }
+
+      function stopMeasurement(showStoppedMessage = true) {
+        measuring = false;
+        if (frameCallbackId !== null && typeof dom.video.cancelVideoFrameCallback === 'function') {
+          try { dom.video.cancelVideoFrameCallback(frameCallbackId); } catch (_) {}
+        }
+        if (animationFrameId !== null) cancelAnimationFrame(animationFrameId);
+        frameCallbackId = null;
+        animationFrameId = null;
+        if (stream) {
+          stream.getTracks().forEach(track => {
+            try { Promise.resolve(track.applyConstraints({ advanced: [{ torch: false }] })).catch(() => {}); } catch (_) {}
+            track.stop();
+          });
+        }
+        stream = null;
+        torchTrack = null;
+        torchOn = false;
+        dom.video.srcObject = null;
+        dom.stopBtn.hidden = true;
+        dom.torchBtn.hidden = true;
+        dom.measureBtn.disabled = false;
+        dom.measureBtn.textContent = '📸 Measure with phone camera';
+        dom.videoOverlayText.textContent = 'Camera stopped';
+        if (showStoppedMessage) showStatus('Measurement stopped. Start again for a new reading.', 'info');
+      }
+
+      function requestNextFrame() {
+        if (!measuring) return;
+        if (typeof dom.video.requestVideoFrameCallback === 'function') {
+          frameCallbackId = dom.video.requestVideoFrameCallback((now, metadata) => {
+            frameCallbackId = null;
+            processFrame(typeof now === 'number' ? now : performance.now(), metadata);
+            requestNextFrame();
+          });
+        } else {
+          animationFrameId = requestAnimationFrame(now => {
+            animationFrameId = null;
+            processFrame(now, null);
+            requestNextFrame();
+          });
+        }
+      }
+
+      function getColourMeans() {
+        if (dom.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !dom.video.videoWidth) return null;
+        processCtx.drawImage(dom.video, 0, 0, 32, 32);
+        // Sample the central 16x16 area, away from the most likely image edges.
+        const pixels = processCtx.getImageData(8, 8, 16, 16).data;
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let i = 0; i < pixels.length; i += 4) {
+          r += pixels[i]; g += pixels[i + 1]; b += pixels[i + 2]; count++;
+        }
+        return { r: r / count, g: g / count, b: b / count };
+      }
+
+      function isFingerPresent(c) {
+        if (!c) return false;
+        // Heuristic, not a biometric guarantee; thresholds vary by camera and exposure.
+        return c.r > 58 && c.r > c.g * 1.10 && c.r > c.b * 1.12 && (c.r - (c.g + c.b) / 2) > 10;
+      }
+
+      function processFrame(now, metadata) {
+        if (!measuring) return;
+        const sessionElapsed = now - sessionStartedAt;
+        if (sessionElapsed > CONFIG.maxSessionMs) {
+          finishMeasurement('Could not obtain a stable signal in time. Try again with your finger covering the camera and flash.', true);
+          return;
+        }
+        // requestVideoFrameCallback provides one callback per presented video frame. Fallback also checks video.currentTime.
+        if (!metadata && dom.video.currentTime === lastVideoTime) {
+          updateProgress(now);
+          return;
+        }
+        lastVideoTime = dom.video.currentTime;
+        const colour = getColourMeans();
+        if (!colour) return;
+
+        const fingerNow = isFingerPresent(colour);
+        if (!fingerNow) {
+          if (fingerLostAt === null) fingerLostAt = now;
+          firstFingerAt = null;
+          if (collectionStartedAt !== null && now - fingerLostAt >= CONFIG.fingerLossGraceMs) {
+            // Do not keep/bridge samples across finger removal or an interruption.
+            clearCollection();
+          }
+          if (sessionElapsed > 650) {
+            dom.fingerGuide.classList.add('visible');
+            dom.videoOverlayText.textContent = 'Finger not detected — cover the camera and flash';
+            setQuality('poor', 'Finger not detected');
+          }
+          updateProgress(now);
+          drawWaveform(dom.waveformCanvas, []);
+          return;
+        }
+
+        fingerLostAt = null;
+        dom.fingerGuide.classList.remove('visible');
+        dom.videoOverlayText.textContent = torchOn ? 'Finger detected — keep still' : 'Finger detected — enable flash if available';
+        if (firstFingerAt === null) firstFingerAt = now;
+        if (collectionStartedAt === null && now - firstFingerAt >= CONFIG.fingerStableMs) {
+          collectionStartedAt = now;
+          samples = [];
+          recentEstimates = [];
+          lastSampleAt = -Infinity;
+          lastAnalysisAt = 0;
+          hideStatus();
+          dom.progressLabel.textContent = 'Collecting stable pulse signal…';
+          setQuality('fair', 'Finger stable — collecting data');
+        }
+
+        if (collectionStartedAt !== null && now - lastSampleAt >= CONFIG.sampleIntervalMs) {
+          const t = now - collectionStartedAt;
+          samples.push({ t, r: colour.r, g: colour.g, b: colour.b });
+          lastSampleAt = now;
+          drawWaveform(dom.waveformCanvas, samples);
+
+          if (t >= CONFIG.minSignalSeconds * 1000 && now - lastAnalysisAt >= CONFIG.analysisIntervalMs) {
+            lastAnalysisAt = now;
+            const result = analyzeSamples(samples);
+            if (result && result.bpm !== null) {
+              recentEstimates.push({ at: now, bpm: result.bpm, channel: result.channel, score: result.score, agreement: result.agreement, quality: result.quality });
+              recentEstimates = recentEstimates.filter(item => now - item.at <= 9000).slice(-5);
+              const stable = assessEstimateStability(recentEstimates);
+              dom.diagChannel.textContent = result.channel.toUpperCase();
+              dom.diagScore.textContent = `${Math.min(result.score, 100).toFixed(2)}${result.score > 100 ? '+' : ''}`;
+              dom.diagAgreement.textContent = result.agreement === null ? 'FFT only' : `${result.agreement.toFixed(1)}% diff`;
+              dom.diagRate.textContent = `${CONFIG.targetRate} Hz target`;
+              if (stable.valid) {
+                latestResult = { bpm: stable.bpm, quality: stable.quality, channel: result.channel };
+                dom.bpmValue.textContent = Math.round(stable.bpm);
+                dom.bpmValue.className = 'cam-bpm ready';
+                dom.bpmUnit.hidden = false;
+                setQuality(stable.quality, stable.quality === 'good' ? 'Consistent signal' : 'Estimate stabilizing');
+                dom.progressLabel.textContent = 'Stable pulse estimate';
+              } else {
+                dom.bpmValue.textContent = '— — —';
+                dom.bpmValue.className = 'cam-bpm';
+                dom.bpmUnit.hidden = true;
+                setQuality('fair', 'Signal captured — confirming consistency');
+                dom.progressLabel.textContent = 'Checking consecutive estimates…';
+              }
+            } else {
+              latestResult = null;
+              recentEstimates = [];
+              setQuality('poor', result?.reason || 'Signal not reliable — hold still');
+              dom.bpmValue.textContent = '— — —';
+              dom.bpmValue.className = 'cam-bpm';
+              dom.bpmUnit.hidden = true;
+            }
+          }
+        }
+        updateProgress(now);
+        if (collectionStartedAt !== null && now - collectionStartedAt >= CONFIG.targetSignalSeconds * 1000) {
+          if (latestResult && latestResult.quality !== 'poor') {
+            opts.onResult(latestResult.bpm, latestResult.quality);
+            finishMeasurement(`Measurement complete: approximately ${Math.round(latestResult.bpm)} BPM. This is a pulse estimate, not a diagnosis.`, false, 'success');
+          } else {
+            finishMeasurement('No sufficiently stable estimate was obtained. Try again, stay still, and make sure the finger covers both camera and flash.', false, 'error');
+          }
+        }
+      }
+
+      function updateProgress(now) {
+        if (collectionStartedAt === null) {
+          const waited = Math.max(0, Math.floor((now - sessionStartedAt) / 1000));
+          dom.progressTime.textContent = `${Math.min(waited, Math.ceil(CONFIG.maxSessionMs / 1000))}s waiting`;
+          dom.progressFill.style.width = '0%';
+          dom.progressLabel.textContent = firstFingerAt === null ? 'Place finger and hold still…' : 'Confirming stable finger placement…';
+          return;
+        }
+        const elapsed = Math.max(0, (now - collectionStartedAt) / 1000);
+        const bounded = Math.min(CONFIG.targetSignalSeconds, elapsed);
+        dom.progressFill.style.width = `${(bounded / CONFIG.targetSignalSeconds) * 100}%`;
+        dom.progressTime.textContent = `${Math.floor(bounded)}s / ${CONFIG.targetSignalSeconds}s`;
+        if (elapsed < CONFIG.minSignalSeconds) dom.progressLabel.textContent = 'Collecting pulse signal…';
+      }
+
+      function finishMeasurement(message, stopped, type = 'info') {
+        if (stopped) {
+          showStatus(message, type);
+        } else {
+          showStatus(message, type);
+        }
+        if (!stopped) {
+          dom.progressFill.style.width = '100%';
+          dom.progressLabel.textContent = 'Measurement complete';
+          dom.progressTime.textContent = `${CONFIG.targetSignalSeconds}s / ${CONFIG.targetSignalSeconds}s`;
+        }
+        stopMeasurement(false);
+      }
+
+      function assessEstimateStability(estimates) {
+        if (estimates.length < 2) return { valid: false };
+        const last = estimates.slice(-3);
+        const vals = last.map(x => x.bpm).sort((a, b) => a - b);
+        const median = vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2;
+        const spread = Math.max(...vals) - Math.min(...vals);
+        // Two estimates within 12 BPM are provisional; three consistent estimates are preferred.
+        if (last.length >= 3 && spread <= 10) {
+          return { valid: true, bpm: median, quality: last.every(x => x.quality === 'good') ? 'good' : 'fair' };
+        }
+        if (last.length === 2 && spread <= 7 && last.every(x => x.quality === 'good')) {
+          return { valid: true, bpm: median, quality: 'fair' };
+        }
+        return { valid: false };
+      }
+
+      function analyzeSamples(rawSamples) {
+        if (rawSamples.length < CONFIG.minSignalSeconds * CONFIG.targetRate * 0.8) return { bpm: null, reason: 'Not enough data yet' };
+        const uniform = resampleSamples(rawSamples, CONFIG.targetRate);
+        if (!uniform || uniform.length < CONFIG.minSignalSeconds * CONFIG.targetRate * 0.8) return { bpm: null, reason: 'Irregular frame timing — try again' };
+
+        const results = [];
+        for (const channel of ['r', 'g', 'b']) {
+          const values = uniform.map(s => s[channel]);
+          const filtered = bandpass(values, CONFIG.targetRate, CONFIG.lowCutHz, CONFIG.highCutHz);
+          // Ignore filter startup transient.
+          const skip = Math.min(Math.round(CONFIG.targetRate * 1.1), Math.floor(filtered.length * 0.15));
+          const signal = filtered.slice(skip);
+          const power = variance(signal);
+          if (!Number.isFinite(power) || power < 0.0002) continue;
+          const spectral = estimateBySpectrum(signal, CONFIG.targetRate);
+          const peaks = estimateByPeaks(signal, CONFIG.targetRate);
+          if (!spectral) continue;
+          const agreement = peaks ? Math.abs(spectral.bpm - peaks.bpm) / ((spectral.bpm + peaks.bpm) / 2) * 100 : null;
+          const peakAgreementGood = peaks && agreement <= 18;
+          const score = spectral.peakRatio;
+          let quality = 'poor';
+          let bpm = null;
+          if (peakAgreementGood && score >= 1.8) {
+            bpm = 0.65 * spectral.bpm + 0.35 * peaks.bpm;
+            quality = score >= 2.6 && agreement <= 12 ? 'good' : 'fair';
+          } else if (!peaks && score >= 3.2) {
+            // Spectrum-only readings are marked fair, not strong.
+            bpm = spectral.bpm;
+            quality = 'fair';
+          }
+          results.push({ channel, bpm, quality, score, agreement, power });
+        }
+        if (!results.length) return { bpm: null, reason: 'Signal too weak — adjust finger position' };
+        results.sort((a, b) => qualityRank(b.quality) - qualityRank(a.quality) || b.score - a.score);
+        const best = results[0];
+        if (best.quality === 'poor' || best.bpm === null || best.bpm < CONFIG.minBpm || best.bpm > CONFIG.maxBpm) {
+          return { bpm: null, reason: 'No clear repeating pulse — hold still and keep the flash on' };
+        }
+        return best;
+      }
+      function qualityRank(q) { return q === 'good' ? 2 : q === 'fair' ? 1 : 0; }
+
+      function resampleSamples(input, rate) {
+        if (input.length < 3) return null;
+        const ordered = input.slice().sort((a, b) => a.t - b.t);
+        const start = ordered[0].t, end = ordered[ordered.length - 1].t;
+        const duration = (end - start) / 1000;
+        if (duration < CONFIG.minSignalSeconds - 0.5) return null;
+        const intervals = [];
+        for (let i = 1; i < ordered.length; i++) {
+          const dt = ordered[i].t - ordered[i - 1].t;
+          if (dt <= 0) continue;
+          intervals.push(dt);
+          if (dt > 260) return null;
+        }
+        const count = Math.floor(duration * rate) + 1;
+        if (count > 1200 || count < 50) return null;
+        const out = [];
+        let j = 0;
+        for (let i = 0; i < count; i++) {
+          const t = start + i * 1000 / rate;
+          while (j < ordered.length - 2 && ordered[j + 1].t < t) j++;
+          const a = ordered[j], b = ordered[Math.min(j + 1, ordered.length - 1)];
+          const span = b.t - a.t;
+          if (span <= 0 || span > 260) return null;
+          const f = Math.max(0, Math.min(1, (t - a.t) / span));
+          out.push({ t, r: a.r + (b.r - a.r) * f, g: a.g + (b.g - a.g) * f, b: a.b + (b.b - a.b) * f });
+        }
+        return out;
+      }
+      function bandpass(values, sampleRate, lowHz, highHz) {
+        const dt = 1 / sampleRate;
+        const highRc = 1 / (2 * Math.PI * lowHz);
+        const highAlpha = highRc / (highRc + dt);
+        const lowRc = 1 / (2 * Math.PI * highHz);
+        const lowAlpha = dt / (lowRc + dt);
+        const highPassed = new Array(values.length);
+        let prevX = values[0], prevY = 0;
+        for (let i = 0; i < values.length; i++) {
+          const x = values[i];
+          const y = highAlpha * (prevY + x - prevX);
+          highPassed[i] = y;
+          prevX = x; prevY = y;
+        }
+        const out = new Array(values.length);
+        let lowY = highPassed[0];
+        for (let i = 0; i < highPassed.length; i++) {
+          lowY += lowAlpha * (highPassed[i] - lowY);
+          out[i] = lowY;
+        }
+        return out;
+      }
+   function estimateBySpectrum(signal, sampleRate) {
+        const n = signal.length;
+        if (n < sampleRate * 7) return null;
+        const mean = signal.reduce((sum, x) => sum + x, 0) / n;
+        const centered = signal.map(x => x - mean);
+        const windowed = centered.map((x, i) => x * (0.5 - 0.5 * Math.cos(2 * Math.PI * i / Math.max(1, n - 1))));
+        const spectra = [];
+        const stepHz = 0.025;
+        for (let f = CONFIG.lowCutHz; f <= CONFIG.highCutHz; f += stepHz) {
+          let re = 0, im = 0;
+          for (let i = 0; i < n; i++) {
+            const phase = 2 * Math.PI * f * i / sampleRate;
+            re += windowed[i] * Math.cos(phase);
+            im -= windowed[i] * Math.sin(phase);
+          }
+          spectra.push({ f, p: re * re + im * im });
+        }
+        let peakIndex = 0;
+        for (let i = 1; i < spectra.length; i++) if (spectra[i].p > spectra[peakIndex].p) peakIndex = i;
+        const peak = spectra[peakIndex];
+        const sidePowers = spectra.filter((s, i) => Math.abs(i - peakIndex) > Math.ceil(0.18 / stepHz)).map(s => s.p).sort((a, b) => a - b);
+        const medianPower = sidePowers.length ? sidePowers[Math.floor(sidePowers.length / 2)] : 0;
+        const peakRatio = peak.p / Math.max(medianPower, peak.p * 0.01, 1e-12); // cap the ratio at 100 for stable diagnostics
+        let interpolatedF = peak.f;
+        if (peakIndex > 0 && peakIndex < spectra.length - 1) {
+          const left = Math.log(spectra[peakIndex - 1].p + 1e-12);
+          const mid = Math.log(peak.p + 1e-12);
+          const right = Math.log(spectra[peakIndex + 1].p + 1e-12);
+          const denom = left - 2 * mid + right;
+          if (Math.abs(denom) > 1e-12) interpolatedF += 0.5 * (left - right) / denom * stepHz;
+        }
+        return { bpm: interpolatedF * 60, peakRatio };
+      }
+
+      function estimateByPeaks(signal, sampleRate) {
+        const avg = signal.reduce((a, b) => a + b, 0) / signal.length;
+        const sd = Math.sqrt(variance(signal));
+        if (!Number.isFinite(sd) || sd < 0.0001) return null;
+        const threshold = avg + sd * 0.20;
+        const minDistance = Math.floor(sampleRate * 60 / CONFIG.maxBpm);
+        const peaks = [];
+        for (let i = 1; i < signal.length - 1; i++) {
+          if (signal[i] > threshold && signal[i] >= signal[i - 1] && signal[i] > signal[i + 1]) {
+            if (!peaks.length || i - peaks[peaks.length - 1] >= minDistance) peaks.push(i);
+            else if (signal[i] > signal[peaks[peaks.length - 1]]) peaks[peaks.length - 1] = i;
+          }
+        }
+        if (peaks.length < 4) return null;
+        const intervals = [];
+        for (let i = 1; i < peaks.length; i++) {
+          const seconds = (peaks[i] - peaks[i - 1]) / sampleRate;
+          if (seconds >= 60 / CONFIG.maxBpm && seconds <= 60 / CONFIG.minBpm) intervals.push(seconds);
+        }
+        if (intervals.length < 3) return null;
+        intervals.sort((a, b) => a - b);
+        const median = intervals[Math.floor(intervals.length / 2)];
+        return { bpm: 60 / median };
+      }
+
+      function variance(values) {
+        if (!values.length) return 0;
+        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+        return values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+      }
+
+      function drawWaveform(canvas, sourceSamples) {
+        const rect = canvas.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const dpr = window.devicePixelRatio || 1;
+        const width = Math.round(rect.width * dpr), height = Math.round(rect.height * dpr);
+        if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const w = rect.width, h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.strokeStyle = 'rgba(255,255,255,.05)'; ctx.lineWidth = 1;
+        for (let y = 20; y < h; y += 25) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+        if (sourceSamples.length < 8) {
+          ctx.fillStyle = 'rgba(255,255,255,.38)'; ctx.font = '12px Inter, sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('Pulse signal will appear here', w / 2, h / 2); return;
+        }
+        const startT = sourceSamples[sourceSamples.length - 1].t - 5000;
+        const recent = sourceSamples.filter(s => s.t >= startT);
+        if (recent.length < 8) return;
+        const vals = recent.map(s => s.r);
+        const centered = vals.map(v => v - vals.reduce((a, b) => a + b, 0) / vals.length);
+        const min = Math.min(...centered), max = Math.max(...centered), range = max - min || 1;
+        ctx.beginPath(); ctx.strokeStyle = '#ff637b'; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+        centered.forEach((v, i) => {
+          const x = 8 + i / Math.max(1, centered.length - 1) * (w - 16);
+          const y = 8 + (1 - (v - min) / range) * (h - 16);
+          if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+      }
+
+
+  dom.measureBtn.addEventListener('click', startMeasurement);
+  dom.stopBtn.addEventListener('click', () => stopMeasurement(true));
+  dom.torchBtn.addEventListener('click', async () => {
+    try { await toggleTorch(); hideStatus(); }
+    catch (_) { showStatus('Flashlight control is not supported by this camera/browser. If available, enable the phone flashlight manually and retry.', 'error'); }
+  });
+  window.addEventListener('resize', () => drawWaveform(dom.waveformCanvas, samples));
+  window.addEventListener('pagehide', () => stopMeasurement(false));
+  drawWaveform(dom.waveformCanvas, []);
+  return { stop: () => { if (measuring) stopMeasurement(false); } };
+})({
+  onResult: (bpm, quality) => recordReading(bpm, $('camState').value, 'camera', quality)
+});
+
+/* ============ start ============ */
+loadProfile();
+new ResizeObserver(() => { drawTrend(); if (reduceMotion) { ecg.buf = null; ecgStatic(); } }).observe($('trend'));
+refresh();
+ecgSetup();
+if (reduceMotion) ecgStatic(); else requestAnimationFrame(ecgFrame);
+</script>
+</body>
+</html>

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ritam: your health profile</title>
+<style>
+  :root{--paper:#fff4f3;--card:#fffbfa;--line:#e6d2d2;--ink:#1f1a24;--muted:#675e6b;--ok:#0d6b62;--alert:#c4122f}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;padding:24px 16px;background:var(--paper);color:var(--ink);
+       font-family:"Atkinson Hyperlegible",Verdana,sans-serif;
+       background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+       background-size:28px 28px}
+  main{width:100%;max-width:560px;margin:0 auto;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:32px 28px}
+  h1{margin:0 0 4px;font-family:"Bricolage Grotesque","Avenir Next",Arial,sans-serif;font-size:30px;letter-spacing:-.5px}
+  .sub{margin:0 0 8px;color:var(--muted)}
+  fieldset{border:0;padding:0;margin:28px 0 0}
+  legend,label.t{font-weight:700;font-size:17px;padding:0;margin:0 0 4px;display:block}
+  .hint{color:var(--muted);font-size:14px;margin:2px 0 10px}
+  input[type=number],input[type=text],input[type=datetime-local]{width:100%;padding:12px;font:inherit;border:1px solid #bba9ab;border-radius:8px;background:#fff;color:var(--ink)}
+  input[aria-invalid="true"]{border-color:var(--alert)}
+  input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid var(--ok);outline-offset:2px}
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .row input[type=number]{width:140px}
+  .check{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:16px;cursor:pointer}
+  .check input{width:20px;height:20px;accent-color:var(--ok);flex:none}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+  @media(max-width:480px){.grid{grid-template-columns:1fr}}
+  .med{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:10px;align-items:end}
+  .med label{font-size:13px;color:var(--muted);display:block;margin-bottom:2px}
+  @media(max-width:480px){.med{grid-template-columns:1fr}}
+  .link{background:none;border:0;color:var(--ok);font:inherit;font-weight:700;cursor:pointer;padding:6px 0;text-decoration:underline}
+  .rm{color:var(--alert)}
+  .err{color:var(--alert);font-size:14px;min-height:18px;margin:4px 0 0}
+  #save{width:100%;margin-top:28px;padding:14px;font:inherit;font-weight:700;color:#fff;background:var(--ok);border:0;border-radius:8px;cursor:pointer}
+  #save[disabled]{opacity:.6;cursor:wait}
+  .note{margin:20px 0 0;font-size:13px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <h1>About you</h1>
+  <p class="sub">Ritam uses this to judge what is unusual <em>for you</em>. You can change it later.</p>
+
+  <form id="f" novalidate>
+    <fieldset>
+      <label class="t" for="age">Age</label>
+      <input id="age" type="number" inputmode="numeric" min="1" max="120" autocomplete="off">
+      <p class="err" id="e-age" role="alert"></p>
+    </fieldset>
+
+    <fieldset>
+      <label class="t" for="bpm">Normal resting heart rate</label>
+      <p class="hint">Beats per minute (BPM). Use a measurement taken while calm and resting, for example after sitting quietly for five minutes.</p>
+      <div class="row">
+        <input id="bpm" type="number" inputmode="numeric" min="30" max="200" placeholder="e.g. 68">
+        <label class="check"><input id="unknown" type="checkbox"> I don't know</label>
+      </div>
+      <p class="err" id="e-restingBpm" role="alert"></p>
+    </fieldset>
+
+    <fieldset id="conds">
+      <legend>Previous medical conditions</legend>
+      <p class="hint">Choose all that apply.</p>
+      <div class="grid">
+        <label class="check"><input type="checkbox" value="heart_disease"> Heart disease</label>
+        <label class="check"><input type="checkbox" value="previous_heart_attack"> Previous heart attack</label>
+        <label class="check"><input type="checkbox" value="irregular_heartbeat"> Irregular heartbeat</label>
+        <label class="check"><input type="checkbox" value="high_blood_pressure"> High blood pressure</label>
+        <label class="check"><input type="checkbox" value="diabetes"> Diabetes</label>
+        <label class="check"><input type="checkbox" value="thyroid_disorder"> Thyroid disorder</label>
+        <label class="check"><input type="checkbox" value="anemia"> Anemia</label>
+        <label class="check"><input type="checkbox" value="kidney_disease"> Kidney disease</label>
+        <label class="check"><input type="checkbox" value="none" data-excl> None</label>
+        <label class="check"><input type="checkbox" value="prefer_not_to_say" data-excl> Prefer not to say</label>
+      </div>
+      <p class="err" id="e-conditions" role="alert"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Medications <span style="font-weight:400;color:var(--muted)">(optional)</span></legend>
+      <p class="hint">Add the medicine name and when you last took a dose. Some medicines can raise or lower heart rate.</p>
+      <div id="meds"></div>
+      <button type="button" class="link" id="add">+ Add a medicine</button>
+      <p class="err" id="e-medications" role="alert"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Emergency contact <span style="font-weight:400;color:var(--muted)">(recommended)</span></legend>
+      <p class="hint">If Ritam shows a serious alert and you do not respond to the warning within a couple of minutes, we send this person a text message asking them to check on you.</p>
+      <label class="t" for="cName" style="font-size:14px;font-weight:400;color:var(--muted)">Name</label>
+      <input id="cName" type="text" maxlength="80" autocomplete="off">
+      <p class="err" id="e-contactName" role="alert"></p>
+      <label class="t" for="cPhone" style="font-size:14px;font-weight:400;color:var(--muted)">Phone number</label>
+      <input id="cPhone" type="tel" inputmode="tel" maxlength="20" placeholder="e.g. +91 98765 43210" autocomplete="off">
+      <p class="err" id="e-contactPhone" role="alert"></p>
+      <label class="t" for="cRel" style="font-size:14px;font-weight:400;color:var(--muted)">Relationship (optional)</label>
+      <input id="cRel" type="text" maxlength="40" placeholder="e.g. Sister, Doctor" autocomplete="off">
+      <p class="err" id="e-contactRelation" role="alert"></p>
+      <label class="check"><input type="checkbox" id="cConsent"> <span>I have told this person, and they agree to get text messages from Baseline if I do not respond to a serious alert.</span></label>
+      <p class="err" id="e-contactConsent" role="alert"></p>
+    </fieldset>
+
+    <button id="save" type="submit">Save and continue</button>
+    <p class="err" id="e-form" role="alert" style="text-align:center"></p>
+  </form>
+  <p class="note">Ritam : MADE BY CTRL ALT ELITE.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const condBoxes = [...document.querySelectorAll('#conds input')];
+const KEYS = ['age', 'restingBpm', 'conditions', 'medications', 'contactName', 'contactPhone', 'contactRelation', 'contactConsent'];
+
+// "I don't know" disables the BPM box
+$('unknown').addEventListener('change', () => {
+  $('bpm').disabled = $('unknown').checked;
+  if ($('unknown').checked) $('bpm').value = '';
+});
+
+// "None" / "Prefer not to say" cannot be combined with other conditions
+condBoxes.forEach(b => b.addEventListener('change', () => {
+  if (!b.checked) return;
+  condBoxes.forEach(o => { if (o !== b && (b.hasAttribute('data-excl') || o.hasAttribute('data-excl'))) o.checked = false; });
+}));
+
+// Medicine rows
+function addMed(name = '', lastDose = '') {
+  const d = document.createElement('div');
+  d.className = 'med';
+  d.innerHTML = `
+    <div><label>Medicine name</label><input type="text" maxlength="80" class="m-name" autocomplete="off"></div>
+    <div><label>Last dose</label><input type="datetime-local" class="m-dose"></div>
+    <button type="button" class="link rm" aria-label="Remove this medicine">Remove</button>`;
+  d.querySelector('.m-name').value = name;
+  d.querySelector('.m-dose').value = lastDose;
+  d.querySelector('.rm').onclick = () => d.remove();
+  $('meds').appendChild(d);
+}
+$('add').onclick = () => { if ($('meds').children.length < 10) addMed(); };
+
+function showErrors(errors) {
+  KEYS.forEach(k => { $('e-' + k).textContent = errors[k] || ''; });
+  $('age').setAttribute('aria-invalid', errors.age ? 'true' : 'false');
+  $('bpm').setAttribute('aria-invalid', errors.restingBpm ? 'true' : 'false');
+  $('e-form').textContent = errors.form || '';
+  const first = KEYS.find(k => errors[k]);
+  if (first) { const el = { age: $('age'), restingBpm: $('bpm'), conditions: condBoxes[0], medications: $('add'), contactName: $('cName'), contactPhone: $('cPhone'), contactRelation: $('cRel'), contactConsent: $('cConsent') }[first]; el.focus(); }
+}
+
+// datetime-local gives "2026-10-09T08:30"; show/save as that, convert to ISO for the server
+const toIso = v => v ? new Date(v).toISOString() : '';
+const toLocal = iso => {
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d)) return '';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+};
+
+// Load existing profile (also checks that the person is signed in)
+(async () => {
+  const res = await fetch('/api/me');
+  if (res.status === 401) { location.href = '/login.html'; return; }
+  const { profile } = await res.json();
+  if (profile) {
+    $('age').value = profile.age;
+    if (profile.restingUnknown) { $('unknown').checked = true; $('bpm').disabled = true; }
+    else $('bpm').value = profile.restingBpm;
+    condBoxes.forEach(b => { b.checked = profile.conditions.includes(b.value); });
+    profile.medications.forEach(m => addMed(m.name, toLocal(m.lastDose)));
+    if (profile.contact) { $('cName').value = profile.contact.name; $('cPhone').value = profile.contact.phone; $('cRel').value = profile.contact.relation; $('cConsent').checked = !!profile.contact.consent; }
+  }
+  if (!$('meds').children.length) addMed();
+})();
+
+$('f').addEventListener('submit', async e => {
+  e.preventDefault();
+  showErrors({});
+  const body = {
+    age: $('age').value === '' ? null : Number($('age').value),
+    restingUnknown: $('unknown').checked,
+    restingBpm: $('bpm').value === '' ? null : Number($('bpm').value),
+    conditions: condBoxes.filter(b => b.checked).map(b => b.value),
+    contact: { name: $('cName').value.trim(), phone: $('cPhone').value.trim(), relation: $('cRel').value.trim() },
+    contactConsent: $('cConsent').checked,
+    medications: [...document.querySelectorAll('.med')].map(r => ({
+      name: r.querySelector('.m-name').value.trim(),
+      lastDose: toIso(r.querySelector('.m-dose').value)
+    }))
+  };
+  $('save').disabled = true; $('save').textContent = 'Saving…';
+  try {
+    const res = await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (res.status === 401) { location.href = '/login.html'; return; }
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) { location.href = '/app.html'; return; }
+    showErrors(data.errors || { form: 'Something went wrong. Please try again.' });
+  } catch { showErrors({ form: 'Could not reach the server. Is it running?' }); }
+  $('save').disabled = false; $('save').textContent = 'Save and continue';
+});
+</script>
+</body>
+</html>

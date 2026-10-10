@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ritam: log in</title>
+<style>
+  :root{--paper:#fff4f3;--card:#fffbfa;--line:#e6d2d2;--ink:#1f1a24;--muted:#675e6b;--ok:#0d6b62;--alert:#c4122f}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;padding:16px;background:var(--paper);color:var(--ink);
+       font-family:"Atkinson Hyperlegible",Verdana,sans-serif;
+       background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+       background-size:28px 28px}
+  main{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:32px 28px}
+  h1{margin:0 0 4px;font-family:"Bricolage Grotesque","Avenir Next",Arial,sans-serif;font-size:32px;letter-spacing:-.5px}
+  .sub{margin:0 0 24px;color:var(--muted)}
+  label{display:block;font-weight:700;margin:16px 0 6px}
+  input{width:100%;padding:12px;font:inherit;border:1px solid #bba9ab;border-radius:8px;background:#fff;color:var(--ink)}
+  input:focus-visible,button:focus-visible{outline:3px solid var(--ok);outline-offset:2px}
+  input[aria-invalid="true"]{border-color:var(--alert)}
+  .err{color:var(--alert);font-size:14px;min-height:18px;margin:4px 0 0}
+  .hint{color:var(--muted);font-size:14px;margin:4px 0 0}
+  button{width:100%;margin-top:24px;padding:14px;font:inherit;font-weight:700;color:#fff;background:var(--ok);border:0;border-radius:8px;cursor:pointer}
+  button[disabled]{opacity:.6;cursor:wait}
+  .form-err{margin-top:16px;text-align:center}
+  .note a{color:var(--ok);font-weight:700}
+  .note{margin:20px 0 0;font-size:13px;color:var(--muted);text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <h1>Welcome back</h1>
+  <p class="sub">Log in to see your heartbeat records.</p>
+
+  <form id="f" novalidate>
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" autocomplete="email" required>
+    <p class="err" id="e-email" role="alert"></p>
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <p class="err" id="e-password" role="alert"></p>
+
+    <button id="btn" type="submit">Log in</button>
+    <p class="err form-err" id="e-form" role="alert"></p>
+  </form>
+  <p class="note">New here? <a href="/">Create an account</a></p>
+  <p class="note">Ritam is a prototype, Made By Ctrl Alt Elite</p>
+</main>
+
+<script>
+const f = document.getElementById('f');
+const btn = document.getElementById('btn');
+const fields = ['email', 'password'];
+
+function showErrors(errors) {
+  fields.forEach(k => {
+    document.getElementById('e-' + k).textContent = errors[k] || '';
+    document.getElementById(k).setAttribute('aria-invalid', errors[k] ? 'true' : 'false');
+  });
+  document.getElementById('e-form').textContent = errors.form || '';
+  const first = fields.find(k => errors[k]);
+  if (first) document.getElementById(first).focus();
+}
+
+// Already logged in? Go straight to the dashboard.
+fetch('/api/me').then(r => r.ok ? r.json() : null).then(d => { if (d) location.href = d.profile ? '/app.html' : '/profile.html'; }).catch(() => {});
+
+f.addEventListener('submit', async e => {
+  e.preventDefault();
+  showErrors({});
+  const body = { email: f.email.value.trim(), password: f.password.value };
+  const errors = {};
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email)) errors.email = 'Enter a valid email address.';
+  if (!body.password) errors.password = 'Enter your password.';
+  if (Object.keys(errors).length) return showErrors(errors);
+
+  btn.disabled = true; btn.textContent = 'Logging in…';
+  try {
+    const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      const me = await fetch('/api/me').then(r => r.json()).catch(() => ({}));
+      location.href = me.profile ? '/app.html' : '/profile.html';
+      return;
+    }
+    showErrors(data.errors || { form: 'Something went wrong. Please try again.' });
+  } catch {
+    showErrors({ form: 'Could not reach the server. Is it running?' });
+  }
+  btn.disabled = false; btn.textContent = 'Log in';
+});
+</script>
+</body>
+</html>

@@ -1,3 +1,11 @@
+<<<<<<< HEAD
 node_modules
 baseline.db
 .env
+=======
+# Object file
+*.o
+
+# Ada Library Information
+*.ali
+>>>>>>> fefdb36d270cc02285882d37975cd9e00b19a6c2
